@@ -18,7 +18,6 @@ var jwtAudience = builder.Configuration["Jwt:Audience"];
 builder.Services.AddDbContext<AppDb>(opt =>
     opt.UseSqlServer(builder.Configuration.GetConnectionString("Default")));
 
-// 🚫 No cookie auth — just IdentityCore + JWT
 builder.Services
     .AddIdentityCore<ApplicationUser>(opt =>
     {
@@ -32,14 +31,13 @@ builder.Services
     .AddRoles<ApplicationRole>()
     .AddEntityFrameworkStores<AppDb>()
     .AddDefaultTokenProviders()
-    .AddSignInManager(); // ok even without cookies; useful for password checks, etc.
+    .AddSignInManager();
 
-// Make JWT the only/default scheme
 builder.Services.AddAuthentication(options =>
     {
         options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-        options.DefaultChallengeScheme    = JwtBearerDefaults.AuthenticationScheme;
-        options.DefaultScheme             = JwtBearerDefaults.AuthenticationScheme;
+        options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+        options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
     })
     .AddJwtBearer(o =>
     {
@@ -59,17 +57,15 @@ builder.Services.AddAuthentication(options =>
         {
             OnChallenge = ctx =>
             {
-                // No redirects. APIs return 401.
                 ctx.HandleResponse();
                 ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
                 return Task.CompletedTask;
             },
             OnMessageReceived = context =>
             {
-                // SignalR access_token support
                 var accessToken = context.Request.Query["access_token"];
                 var path = context.HttpContext.Request.Path;
-                if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs/game"))
+                if (!string.IsNullOrEmpty(accessToken) && (path.StartsWithSegments("/hubs/game") || path.StartsWithSegments("/hubs/chat")))
                     context.Token = accessToken;
                 return Task.CompletedTask;
             }
@@ -116,29 +112,44 @@ var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())
 {
-    var db = scope.ServiceProvider.GetRequiredService<AppDb>();
-    await db.Database.MigrateAsync();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    var db = scope.ServiceProvider.GetRequiredService<ChessServer.Data.AppDb>();
 
-    var roleMgr = scope.ServiceProvider.GetRequiredService<RoleManager<ApplicationRole>>();
-    var userMgr = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+    try
+    {
+        logger.LogInformation("Applying EF Core migrations...");
+        await db.Database.MigrateAsync();
+        logger.LogInformation("EF Core migrations applied.");
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Database migration failed. Check connection string and permissions.");
+        throw;
+    }
 
-    foreach (var r in new[] { "Admin", "Player" })
-        if (!await roleMgr.RoleExistsAsync(r))
-            await roleMgr.CreateAsync(new ApplicationRole { Name = r });
+    // Minimal seed (roles/admin). Keep it lightweight; heavy seeding belongs in migrations.
+    var roleMgr = scope.ServiceProvider.GetRequiredService<RoleManager<ChessServer.Data.ApplicationRole>>();
+    var userMgr = scope.ServiceProvider.GetRequiredService<UserManager<ChessServer.Data.ApplicationUser>>();
 
-    var adminEmail = builder.Configuration["Seed:Admin:User"] ?? "admin@chess.local";
-    var adminPass  = builder.Configuration["Seed:Admin:Pass"] ?? "Admin!123";
-    var admin = await userMgr.FindByNameAsync(adminEmail);
+    foreach (var role in new[] { "Admin", "Player" })
+        if (!await roleMgr.RoleExistsAsync(role))
+            await roleMgr.CreateAsync(new ChessServer.Data.ApplicationRole { Name = role });
+
+    var adminUserName = builder.Configuration["Seed:Admin:UserName"] ?? "admin";
+    var adminEmail    = builder.Configuration["Seed:Admin:Email"]    ?? "admin@chess.local";
+    var adminPass     = builder.Configuration["Seed:Admin:Pass"]     ?? "Admin!123";
+
+    var admin = await userMgr.FindByNameAsync(adminUserName);
     if (admin is null)
     {
-        admin = new ApplicationUser
+        admin = new ChessServer.Data.ApplicationUser
         {
-            UserName = adminEmail,
+            UserName = adminUserName,
             Email = adminEmail,
             DisplayName = "Admin"
         };
-        await userMgr.CreateAsync(admin, adminPass);
-        await userMgr.AddToRoleAsync(admin, "Admin");
+        var create = await userMgr.CreateAsync(admin, adminPass);
+        if (create.Succeeded) await userMgr.AddToRoleAsync(admin, "Admin");
     }
 }
 
@@ -154,6 +165,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapHub<GameHub>("/hubs/game");
+app.MapHub<ChatHub>("/hubs/chat");
 app.MapControllers();
 
 app.Run();

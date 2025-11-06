@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace ChessServer.Migrations
 {
     /// <inheritdoc />
-    public partial class Initial : Migration
+    public partial class Chat : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -33,7 +33,7 @@ namespace ChessServer.Migrations
                 {
                     Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     DisplayName = table.Column<string>(type: "nvarchar(128)", maxLength: 128, nullable: false),
-                    UserName = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: true),
+                    UserName = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: false),
                     NormalizedUserName = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: true),
                     Email = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: true),
                     NormalizedEmail = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: true),
@@ -54,6 +54,19 @@ namespace ChessServer.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "DirectThreads",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    ThreadKeyId = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_DirectThreads", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "Games",
                 columns: table => new
                 {
@@ -66,6 +79,7 @@ namespace ChessServer.Migrations
                     Fullmove = table.Column<int>(type: "int", nullable: false),
                     Outcome = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     Reason = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Status = table.Column<string>(type: "nvarchar(16)", maxLength: 16, nullable: false),
                     CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false)
                 },
                 constraints: table =>
@@ -180,6 +194,65 @@ namespace ChessServer.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "DirectMessages",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    ThreadId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    SenderId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    KeyId = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: true),
+                    NonceB64 = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: true),
+                    MacB64 = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: true),
+                    CiphertextB64 = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    BodyHashHex = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: false),
+                    SentAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    DeliveredAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    ReadAt = table.Column<DateTime>(type: "datetime2", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_DirectMessages", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_DirectMessages_AspNetUsers_SenderId",
+                        column: x => x.SenderId,
+                        principalTable: "AspNetUsers",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_DirectMessages_DirectThreads_ThreadId",
+                        column: x => x.ThreadId,
+                        principalTable: "DirectThreads",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "DirectThreadMembers",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    ThreadId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    UserId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    JoinedAt = table.Column<DateTime>(type: "datetime2", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_DirectThreadMembers", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_DirectThreadMembers_AspNetUsers_UserId",
+                        column: x => x.UserId,
+                        principalTable: "AspNetUsers",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_DirectThreadMembers_DirectThreads_ThreadId",
+                        column: x => x.ThreadId,
+                        principalTable: "DirectThreads",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "GameParticipants",
                 columns: table => new
                 {
@@ -275,11 +348,43 @@ namespace ChessServer.Migrations
                 column: "NormalizedEmail");
 
             migrationBuilder.CreateIndex(
+                name: "IX_AspNetUsers_UserName",
+                table: "AspNetUsers",
+                column: "UserName",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "UserNameIndex",
                 table: "AspNetUsers",
                 column: "NormalizedUserName",
                 unique: true,
                 filter: "[NormalizedUserName] IS NOT NULL");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_DirectMessages_BodyHashHex",
+                table: "DirectMessages",
+                column: "BodyHashHex");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_DirectMessages_SenderId",
+                table: "DirectMessages",
+                column: "SenderId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_DirectMessages_ThreadId",
+                table: "DirectMessages",
+                column: "ThreadId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_DirectThreadMembers_ThreadId_UserId",
+                table: "DirectThreadMembers",
+                columns: new[] { "ThreadId", "UserId" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_DirectThreadMembers_UserId",
+                table: "DirectThreadMembers",
+                column: "UserId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_GameParticipants_GameId_Color",
@@ -324,6 +429,12 @@ namespace ChessServer.Migrations
                 name: "AspNetUserTokens");
 
             migrationBuilder.DropTable(
+                name: "DirectMessages");
+
+            migrationBuilder.DropTable(
+                name: "DirectThreadMembers");
+
+            migrationBuilder.DropTable(
                 name: "GameParticipants");
 
             migrationBuilder.DropTable(
@@ -331,6 +442,9 @@ namespace ChessServer.Migrations
 
             migrationBuilder.DropTable(
                 name: "AspNetRoles");
+
+            migrationBuilder.DropTable(
+                name: "DirectThreads");
 
             migrationBuilder.DropTable(
                 name: "AspNetUsers");

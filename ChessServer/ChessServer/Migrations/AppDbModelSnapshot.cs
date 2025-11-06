@@ -119,8 +119,9 @@ namespace ChessServer.Migrations
                         .HasColumnType("bit");
 
                     b.Property<string>("UserName")
-                        .HasMaxLength(256)
-                        .HasColumnType("nvarchar(256)");
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
 
                     b.HasKey("Id");
 
@@ -131,6 +132,9 @@ namespace ChessServer.Migrations
                         .IsUnique()
                         .HasDatabaseName("UserNameIndex")
                         .HasFilter("[NormalizedUserName] IS NOT NULL");
+
+                    b.HasIndex("UserName")
+                        .IsUnique();
 
                     b.ToTable("AspNetUsers", (string)null);
                 });
@@ -148,6 +152,102 @@ namespace ChessServer.Migrations
                     b.HasIndex("RoleId");
 
                     b.ToTable("AspNetUserRoles", (string)null);
+                });
+
+            modelBuilder.Entity("ChessServer.Data.DirectMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("BodyHashHex")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("CiphertextB64")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("DeliveredAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("KeyId")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("MacB64")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("NonceB64")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<DateTime?>("ReadAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("SenderId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("SentAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("ThreadId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BodyHashHex");
+
+                    b.HasIndex("SenderId");
+
+                    b.HasIndex("ThreadId");
+
+                    b.ToTable("DirectMessages");
+                });
+
+            modelBuilder.Entity("ChessServer.Data.DirectThread", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ThreadKeyId")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("DirectThreads");
+                });
+
+            modelBuilder.Entity("ChessServer.Data.DirectThreadMember", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("JoinedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("ThreadId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("ThreadId", "UserId")
+                        .IsUnique();
+
+                    b.ToTable("DirectThreadMembers");
                 });
 
             modelBuilder.Entity("ChessServer.Data.Game", b =>
@@ -389,6 +489,44 @@ namespace ChessServer.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("ChessServer.Data.DirectMessage", b =>
+                {
+                    b.HasOne("ChessServer.Data.ApplicationUser", "Sender")
+                        .WithMany()
+                        .HasForeignKey("SenderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ChessServer.Data.DirectThread", "Thread")
+                        .WithMany("Messages")
+                        .HasForeignKey("ThreadId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Sender");
+
+                    b.Navigation("Thread");
+                });
+
+            modelBuilder.Entity("ChessServer.Data.DirectThreadMember", b =>
+                {
+                    b.HasOne("ChessServer.Data.DirectThread", "Thread")
+                        .WithMany("Members")
+                        .HasForeignKey("ThreadId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ChessServer.Data.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Thread");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("ChessServer.Data.GameParticipant", b =>
                 {
                     b.HasOne("ChessServer.Data.Game", "Game")
@@ -458,6 +596,13 @@ namespace ChessServer.Migrations
             modelBuilder.Entity("ChessServer.Data.ApplicationUser", b =>
                 {
                     b.Navigation("Participations");
+                });
+
+            modelBuilder.Entity("ChessServer.Data.DirectThread", b =>
+                {
+                    b.Navigation("Members");
+
+                    b.Navigation("Messages");
                 });
 
             modelBuilder.Entity("ChessServer.Data.Game", b =>
