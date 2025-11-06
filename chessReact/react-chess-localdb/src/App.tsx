@@ -6,10 +6,10 @@ import {
   useMemo,
   useRef,
   startTransition,
-  type Key,
 } from 'react';
-import { MessageCircle, X, Send, Filter, Search } from 'lucide-react';
+import { X } from 'lucide-react';
 import ChatDock from './chat/chatDock.tsx';
+import { Chess, type Square, Move as ChessMove } from 'chess.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -83,330 +83,33 @@ const QUEEN_DIR = [...ROOK_DIR, ...BISHOP_DIR];
 // ═══════════════════════════════════════════════════════════════════════════════
 // CHESS ENGINE FUNCTIONS
 // ═══════════════════════════════════════════════════════════════════════════════
-function onBoard(r: number, f: number) { return r >= 0 && r < 8 && f >= 0 && f < 8; }
 function idx(r: number, f: number) { return r * 8 + f; }
 function rank(i: number) { return Math.floor(i / 8); }
 function file(i: number) { return i % 8; }
 function colorOpp(c: 'w' | 'b'): 'w' | 'b' { return c === 'w' ? 'b' : 'w'; }
 function algebraic(i: number) { return 'abcdefgh'[file(i)] + (8 - rank(i)); }
 
-function parseFEN(fen: string): { board: (Piece | null)[]; state: GameState } {
-  const [placement, turn, castling, ep, half, full] = fen.trim().split(/\s+/);
-  const rows = placement.split('/');
-  const board = [];
-  for (const row of rows) {
-    for (const ch of row) {
-      if (/\d/.test(ch)) {
-        for (let i = 0; i < Number(ch); i++) board.push(null);
-      } else {
-        board.push({
-          color: (ch === ch.toUpperCase() ? 'w' : 'b') as 'w' | 'b',
-          type: ch.toLowerCase() as Piece['type']
-        });
-      }
-    }
-  }
+function normalizeGame(row: any): Game {
   return {
-    board,
-    state: {
-      turn: (turn || 'w') as 'w' | 'b',
-      castling: castling === '-' ? '' : castling,
-      ep: ep === '-' ? null : ('abcdefgh'.indexOf(ep[0]) + (8 - Number(ep[1])) * 8),
-      halfmove: Number(half) || 0,
-      fullmove: Number(full) || 1
-    }
+    id: row.id,
+    code: row.code,
+    fen: row.fen,
+    status: row.status,
+    outcome: row.outcome ?? null,
+    reason: row.reason ?? null,
+    participants: (row.participants ?? row.Participants ?? []).map((p: any) => ({
+      displayName: p.displayName ?? p.DisplayName,
+      color: p.color,
+    })),
+    history: (row.history ?? row.History ?? []).map((m: any) => ({
+      index: m.index,
+      from: m.from,
+      to: m.to,
+      flags: m.flags,
+      promotion: m.promotion,
+    })),
   };
 }
-
-function boardToFEN(board: (Piece | null)[], s: GameState): string {
-  const rows = [];
-  for (let r = 0; r < 8; r++) {
-    let empty = 0, row = '';
-    for (let f = 0; f < 8; f++) {
-      const p = board[idx(r, f)];
-      if (!p) empty++;
-      else {
-        if (empty) { row += empty; empty = 0; }
-        row += p.color === 'w' ? p.type.toUpperCase() : p.type;
-      }
-    }
-    if (empty) row += empty;
-    rows.push(row);
-  }
-  const cast = s.castling || '-';
-  const epStr = s.ep == null ? '-' : algebraic(s.ep);
-  return `${rows.join('/')} ${s.turn} ${cast} ${epStr} ${s.halfmove} ${s.fullmove}`;
-}
-
-function squareAttackedBy(board: (Piece | null)[], sq: number, attacker: 'w' | 'b'): boolean {
-  for (const [dr, df] of KNIGHT) {
-    const r = rank(sq) + dr, f = file(sq) + df;
-    if (!onBoard(r, f)) continue;
-    const p = board[idx(r, f)];
-    if (p && p.color === attacker && p.type === 'n') return true;
-  }
-  for (const [dr, df] of KING) {
-    const r = rank(sq) + dr, f = file(sq) + df;
-    if (!onBoard(r, f)) continue;
-    const p = board[idx(r, f)];
-    if (p && p.color === attacker && p.type === 'k') return true;
-  }
-  for (const [dr, df] of ROOK_DIR) {
-    let r = rank(sq) + dr, f = file(sq) + df;
-    while (onBoard(r, f)) {
-      const p = board[idx(r, f)];
-      if (p) {
-        if (p.color === attacker && (p.type === 'r' || p.type === 'q')) return true;
-        break;
-      }
-      r += dr; f += df;
-    }
-  }
-  for (const [dr, df] of BISHOP_DIR) {
-    let r = rank(sq) + dr, f = file(sq) + df;
-    while (onBoard(r, f)) {
-      const p = board[idx(r, f)];
-      if (p) {
-        if (p.color === attacker && (p.type === 'b' || p.type === 'q')) return true;
-        break;
-      }
-      r += dr; f += df;
-    }
-  }
-  const dir = attacker === 'w' ? -1 : 1;
-  for (const df of [-1, 1]) {
-    const r = rank(sq) + dir, f = file(sq) + df;
-    if (!onBoard(r, f)) continue;
-    const p = board[idx(r, f)];
-    if (p && p.color === attacker && p.type === 'p') return true;
-  }
-  return false;
-}
-
-function inCheck(board: (Piece | null)[], color: 'w' | 'b'): boolean {
-  let kingSq = -1;
-  for (let i = 0; i < 64; i++) {
-    const p = board[i];
-    if (p && p.color === color && p.type === 'k') { kingSq = i; break; }
-  }
-  if (kingSq === -1) return false;
-  return squareAttackedBy(board, kingSq, colorOpp(color));
-}
-
-function slide(board: (Piece | null)[], from: number, color: 'w' | 'b', dirs: number[][]): Move[] {
-  const r0 = rank(from), f0 = file(from);
-  const res = [];
-  for (const [dr, df] of dirs) {
-    let r = r0 + dr, f = f0 + df;
-    while (onBoard(r, f)) {
-      const i = idx(r, f);
-      const t = board[i];
-      if (!t) {
-        res.push({ from, to: i });
-      } else {
-        if (t.color !== color && t.type !== 'k') res.push({ from, to: i, captured: t });
-        break;
-      }
-      r += dr; f += df;
-    }
-  }
-  return res;
-}
-
-function getPseudoLegalMoves(board: (Piece | null)[], s: GameState, index: number): Move[] {
-  const p = board[index];
-  if (!p || p.color !== s.turn) return [];
-  const r = rank(index), f = file(index);
-  const moves = [];
-
-  if (p.type === 'p') {
-    const dir = p.color === 'w' ? -1 : 1;
-    const startRank = p.color === 'w' ? 6 : 1;
-    const lastRank = p.color === 'w' ? 0 : 7;
-    const r1 = r + dir;
-    if (onBoard(r1, f) && !board[idx(r1, f)]) {
-      const to = idx(r1, f);
-      const m: Move = { from: index, to };
-      if (r1 === lastRank) m.flags = 'promo';
-      moves.push(m);
-      if (r === startRank) {
-        const r2 = r + 2 * dir;
-        if (onBoard(r2, f) && !board[idx(r2, f)]) moves.push({ from: index, to: idx(r2, f) });
-      }
-    }
-    for (const df of [-1, 1]) {
-      const rc = r + dir, fc = f + df;
-      if (!onBoard(rc, fc)) continue;
-      const ti = idx(rc, fc);
-      const t = board[ti];
-      if (t && t.color !== p.color && t.type !== 'k') {
-        const m: Move = { from: index, to: ti, captured: t };
-        if (rc === lastRank) m.flags = 'promo';
-        moves.push(m);
-      }
-    }
-    if (s.ep != null) {
-      const er = rank(s.ep), ef = file(s.ep);
-      if (er === r + dir && Math.abs(ef - f) === 1) {
-        moves.push({
-          from: index,
-          to: s.ep,
-          flags: 'ep',
-          captured: { color: colorOpp(p.color) as 'w' | 'b', type: 'p' as const }
-        } satisfies Move);
-      }
-    }
-  } else if (p.type === 'n') {
-    for (const [dr, df] of KNIGHT) {
-      const nr = r + dr, nf = f + df;
-      if (!onBoard(nr, nf)) continue;
-      const t = board[idx(nr, nf)];
-      if (!t || (t.color !== p.color && t.type !== 'k')) moves.push({ from: index, to: idx(nr, nf), captured: t || undefined });
-    }
-  } else if (p.type === 'b') {
-    moves.push(...slide(board, index, p.color, BISHOP_DIR));
-  } else if (p.type === 'r') {
-    moves.push(...slide(board, index, p.color, ROOK_DIR));
-  } else if (p.type === 'q') {
-    moves.push(...slide(board, index, p.color, QUEEN_DIR));
-  } else if (p.type === 'k') {
-    for (const [dr, df] of KING) {
-      const nr = r + dr, nf = f + df;
-      if (!onBoard(nr, nf)) continue;
-      const t = board[idx(nr, nf)];
-      if (!t || (t.color !== p.color && t.type !== 'k')) moves.push({ from: index, to: idx(nr, nf), captured: t || undefined });
-    }
-    if (p.color === 'w' && r === 7 && f === 4) {
-      if (s.castling.includes('K') && !board[idx(7, 5)] && !board[idx(7, 6)]) {
-        if (!inCheck(board, 'w') && !squareAttackedBy(board, idx(7, 5), 'b') && !squareAttackedBy(board, idx(7, 6), 'b')) {
-          moves.push({ from: index, to: idx(7, 6), flags: 'castle-k' });
-        }
-      }
-      if (s.castling.includes('Q') && !board[idx(7, 3)] && !board[idx(7, 2)] && !board[idx(7, 1)]) {
-        if (!inCheck(board, 'w') && !squareAttackedBy(board, idx(7, 3), 'b') && !squareAttackedBy(board, idx(7, 2), 'b')) {
-          moves.push({ from: index, to: idx(7, 2), flags: 'castle-q' });
-        }
-      }
-    }
-    if (p.color === 'b' && r === 0 && f === 4) {
-      if (s.castling.includes('k') && !board[idx(0, 5)] && !board[idx(0, 6)]) {
-        if (!inCheck(board, 'b') && !squareAttackedBy(board, idx(0, 5), 'w') && !squareAttackedBy(board, idx(0, 6), 'w')) {
-          moves.push({ from: index, to: idx(0, 6), flags: 'castle-k' });
-        }
-      }
-      if (s.castling.includes('q') && !board[idx(0, 3)] && !board[idx(0, 2)] && !board[idx(0, 1)]) {
-        if (!inCheck(board, 'b') && !squareAttackedBy(board, idx(0, 3), 'w') && !squareAttackedBy(board, idx(0, 2), 'w')) {
-          moves.push({ from: index, to: idx(0, 2), flags: 'castle-q' });
-        }
-      }
-    }
-  }
-  return moves;
-}
-
-function makeMove(board: (Piece | null)[], state: GameState, move: Move, skipCheck?: boolean): { board: (Piece | null)[]; state: GameState } {
-  const b = board.slice();
-  const s = { ...state };
-  const moving = b[move.from];
-  if (!moving) return { board, state };
-
-  s.ep = null;
-  const isPawnMove = moving.type === 'p';
-  const isCapture = !!move.captured || move.flags === 'ep';
-  s.halfmove = (isPawnMove || isCapture) ? 0 : s.halfmove + 1;
-
-  b[move.to] = { ...moving };
-  b[move.from] = null;
-
-  if (move.promotion) b[move.to] = {
-    color: moving.color,
-    type: move.promotion as Piece['type']
-  };
-
-  if (move.flags === 'ep') {
-    const dir = moving.color === 'w' ? 1 : -1;
-    b[move.to + dir * 8] = null;
-  }
-
-  if (moving.type === 'p' && Math.abs(move.to - move.from) === 16) {
-    s.ep = (move.to + move.from) / 2;
-  }
-
-  const fromR = rank(move.from), fromF = file(move.from);
-  const toR = rank(move.to), toF = file(move.to);
-
-  if (moving.type === 'k') {
-    if (moving.color === 'w') {
-      s.castling = s.castling.replace('K', '').replace('Q', '');
-    } else {
-      s.castling = s.castling.replace('k', '').replace('q', '');
-    }
-    if (move.flags === 'castle-k') {
-      if (moving.color === 'w') { b[idx(7, 5)] = b[idx(7, 7)]; b[idx(7, 7)] = null; }
-      else { b[idx(0, 5)] = b[idx(0, 7)]; b[idx(0, 7)] = null; }
-    }
-    if (move.flags === 'castle-q') {
-      if (moving.color === 'w') { b[idx(7, 3)] = b[idx(7, 0)]; b[idx(7, 0)] = null; }
-      else { b[idx(0, 3)] = b[idx(0, 0)]; b[idx(0, 0)] = null; }
-    }
-  }
-
-  if (moving.type === 'r') {
-    if (fromR === 7 && fromF === 0) s.castling = s.castling.replace('Q', '');
-    if (fromR === 7 && fromF === 7) s.castling = s.castling.replace('K', '');
-    if (fromR === 0 && fromF === 0) s.castling = s.castling.replace('q', '');
-    if (fromR === 0 && fromF === 7) s.castling = s.castling.replace('k', '');
-  }
-
-  if (isCapture) {
-    if (toR === 7 && toF === 0) s.castling = s.castling.replace('Q', '');
-    if (toR === 7 && toF === 7) s.castling = s.castling.replace('K', '');
-    if (toR === 0 && toF === 0) s.castling = s.castling.replace('q', '');
-    if (toR === 0 && toF === 7) s.castling = s.castling.replace('k', '');
-  }
-
-  s.turn = colorOpp(s.turn);
-  if (s.turn === 'w') s.fullmove += 1;
-
-  if (!skipCheck && inCheck(b, colorOpp(s.turn))) return { board, state };
-
-  return { board: b, state: s };
-}
-
-function getLegalMoves(board: (Piece | null)[], s: GameState, index: number): Move[] {
-  const pseudo = getPseudoLegalMoves(board, s, index);
-  const res = [];
-  for (const m of pseudo) {
-    const { board: nb, state: ns } = makeMove(board, s, m, true);
-    if (inCheck(nb, s.turn)) continue;
-    const hasOppKing = nb.some((p) => p !== null && p.color === ns.turn && p.type === 'k');
-    if (!hasOppKing) continue;
-    res.push(m);
-  }
-  return res;
-}
-
-function hasLegalMove(board: (Piece | null)[], s: GameState): boolean {
-  for (let i = 0; i < 64; i++) {
-    const p = board[i];
-    if (!p || p.color !== s.turn) continue;
-    if (getLegalMoves(board, s, i).length) return true;
-  }
-  return false;
-}
-
-function detectOutcome(board: (Piece | null)[], s: GameState) {
-  const side = s.turn;
-  const legal = hasLegalMove(board, s);
-  const check = inCheck(board, side);
-  if (!legal) {
-    if (check) return { outcome: 'checkmate', reason: side === 'w' ? 'Black wins' : 'White wins' };
-    return { outcome: 'draw', reason: 'stalemate' };
-  }
-  if (s.halfmove >= 100) return { outcome: 'draw', reason: '50-move rule' };
-  return { outcome: null, reason: null };
-}
-
 // ═══════════════════════════════════════════════════════════════════════════════
 // AUTH COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -529,17 +232,27 @@ function Lobby({ token, user, onGameSelect }: { token: string; user: User; onGam
   const [search, setSearch] = useState('');
 
   const loadGames = async () => {
-    const res = await fetch(API_BASE + '/games/waiting', {
+    const params = new URLSearchParams();
+    params.set('status', statusFilter);
+    if (onlyMine) params.set('onlyMine', 'true');
+    if (search.trim()) params.set('q', search.trim());
+
+    const res = await fetch(`${API_BASE}/games?${params.toString()}`, {
       headers: { Authorization: `Bearer ${token}` }
     });
-    if (res.ok) setGames(await res.json());
+    if (!res.ok) return;
+
+    const rows = await res.json();
+    setGames(rows.map((r: any) => normalizeGame(r)));
   };
 
   useEffect(() => {
-    loadGames();
-    const i = setInterval(loadGames, 3000);
-    return () => clearInterval(i);
-  }, [token]);
+    let alive = true;
+    const tick = async () => { if (alive) await loadGames(); };
+    tick();
+    const i = setInterval(tick, 3000);
+    return () => { alive = false; clearInterval(i); };
+  }, [token, statusFilter, onlyMine, search]);
 
   const createGame = async () => {
     setCreating(true);
@@ -780,7 +493,7 @@ function Lobby({ token, user, onGameSelect }: { token: string; user: User; onGam
                         onClick={() => {
                           const iAmIn = g.participants.some(p => p.displayName === user.displayName);
                           const isFull = g.participants.length >= 2;
-                          
+
                           if (!iAmIn && isFull) {
                             onGameSelect(g.id, true);
                           } else {
@@ -789,10 +502,10 @@ function Lobby({ token, user, onGameSelect }: { token: string; user: User; onGam
                         }}
                         className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded transition"
                       >
-                        {finished 
-                          ? 'View' 
-                          : myColor 
-                            ? 'Resume' 
+                        {finished
+                          ? 'View'
+                          : myColor
+                            ? 'Resume'
                             : (g.participants.length >= 2 ? 'Spectate' : 'Join')}
                       </button>
                     </div>
@@ -808,20 +521,47 @@ function Lobby({ token, user, onGameSelect }: { token: string; user: User; onGam
 }
 
 function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { token: string; user: User; gameId: string; onBack: () => void, spectatorMode: boolean }) {
+  const [chess] = useState(() => new Chess());
   const [board, setBoard] = useState<(Piece | null)[]>([]);
-  const [state, setState] = useState<GameState | null>(null);
   const [game, setGame] = useState<Game | null>(null);
-  const [legalMoves, setLegalMoves] = useState<Move[]>([]);
   const [myColor, setMyColor] = useState<'w' | 'b' | null>(null);
-  const [promoting, setPromoting] = useState<{ from: number; to: number } | null>(null);
-  const [selected, setSelected] = useState<number | null>(null);
+  const [legalMoves, setLegalMoves] = useState<Square[]>([]);
+  const [promoting, setPromoting] = useState<{ from: Square; to: Square } | null>(null);
+  const [selected, setSelected] = useState<Square | null>(null);
 
   const isSpectating = useMemo(() => {
-    if (spectatorMode) return true;
     if (!game) return false;
-    const participant = game.participants.find(p => p.displayName === user.displayName);
-    return !participant;
+    if (spectatorMode) return true;
+    if (game.status === 'waiting') return false;
+    const isParticipant = game.participants.some(p => p.displayName === user.displayName);
+    return !isParticipant;
   }, [game, user.displayName, spectatorMode]);
+
+  const chessBoardToArray = (chessInstance: Chess): (Piece | null)[] => {
+    const result: (Piece | null)[] = [];
+    const boardArray = chessInstance.board();
+
+    for (let rank = 0; rank < 8; rank++) {
+      for (let file = 0; file < 8; file++) {
+        const square = boardArray[rank][file];
+        if (square) {
+          result.push({
+            color: square.color,
+            type: square.type
+          });
+        } else {
+          result.push(null);
+        }
+      }
+    }
+    return result;
+  };
+
+  const indexToAlgebraic = (i: number): Square => {
+    const rank = Math.floor(i / 8);
+    const file = i % 8;
+    return ('abcdefgh'[file] + (8 - rank)) as Square; // Add 'as Square' cast
+  };
 
   const lastAppliedRef = useRef<number>(0);
 
@@ -848,7 +588,12 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
     return `/icons/${typeNames[piece.type]}_${color}.svg`;
   };
 
-  // ── First load: hydrate full game & baseline FEN
+  const algebraicToIndex = (sq: string): number => {
+    const file = 'abcdefgh'.indexOf(sq[0]);
+    const rank = 8 - parseInt(sq[1]);
+    return rank * 8 + file;
+  };
+
   const loadGameFull = async () => {
     const res = await fetch(`${API_BASE}/games/${gameId}`, {
       headers: { Authorization: `Bearer ${token}` }
@@ -856,9 +601,10 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
     if (!res.ok) return;
     const g: Game = await res.json();
     setGame(g);
-    const { board: b, state: s } = parseFEN(g.fen);
-    setBoard(b);
-    setState(s);
+
+    chess.load(g.fen);
+    setBoard(chessBoardToArray(chess));
+
     lastAppliedRef.current = g.history?.length ?? 0;
   };
 
@@ -869,7 +615,6 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
     loadGameFull();
   }, [gameId]);
 
-  // ── Track my color once we know the game roster
   useEffect(() => {
     if (!game) return;
     const me = game.participants.find((p: { displayName: string }) => p.displayName === user.displayName);
@@ -877,7 +622,6 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
     else setMyColor(null);
   }, [game, user.displayName]);
 
-  // ── Delta polling: fetch lightweight game and reconcile by history growth
   useEffect(() => {
     let alive = true;
     const tick = async () => {
@@ -889,38 +633,14 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
         const g: Game = await res.json();
         if (!alive) return;
 
-        // If we don't have a baseline, just hydrate
-        if (!state || !board || lastAppliedRef.current === 0) {
-          setGame(g);
-          const { board: b, state: s } = parseFEN(g.fen);
-          setBoard(b);
-          setState(s);
-          lastAppliedRef.current = g.history?.length ?? 0;
-          return;
-        }
-
-        // Apply only new moves
         const currentLen = lastAppliedRef.current;
         const newLen = g.history?.length ?? 0;
 
-        if (newLen > currentLen && board && state) {
-          let nb = board;
-          let ns = state;
-          for (let k = currentLen; k < newLen; k++) {
-            const mv = g.history[k];
-            const resMove = makeMove(nb, ns, { from: mv.from, to: mv.to, flags: mv.flags, promotion: mv.promotion } as Move, true);
-            nb = resMove.board; ns = resMove.state;
-          }
-
-          // Guard: if we drifted, resync to server FEN
-          try {
-            if (boardToFEN(nb, ns) !== g.fen) {
-              const parsed = parseFEN(g.fen);
-              nb = parsed.board; ns = parsed.state;
-            }
-          } catch { /* ignore */ }
-
-          startTransition(() => { setBoard(nb); setState(ns); });
+        if (newLen !== currentLen || !board.length) {
+          chess.load(g.fen);
+          startTransition(() => {
+            setBoard(chessBoardToArray(chess));
+          });
           lastAppliedRef.current = newLen;
         }
 
@@ -929,48 +649,45 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
     };
 
     const i = setInterval(tick, 1200);
-    tick(); // immediate
+    tick();
     return () => { alive = false; clearInterval(i); };
-  }, [gameId, token, state, board]);
+  }, [gameId, token]);
 
   const joinGame = async (color: string) => {
     const res = await fetch(`${API_BASE}/games/${gameId}/join?color=${color}`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` }
     });
-    if (res.ok) {
-      const data = await res.json();
-      setMyColor(data.color);
-      loadGameFull();
-    }
+    if (!res.ok) return;
+
+    const data = await res.json();
+    if (data.role && data.role !== 'spectator') setMyColor(data.role);
+    await loadGameFull();
   };
 
   const handleSquareClick = (i: number) => {
     if (isSpectating || !myColor) return;
-    if (!state || !board || game?.status !== 'active') return;
-    if (state.turn !== myColor) return;
+    if (!chess || game?.status !== 'active') return;
+    if (chess.turn() !== myColor) return;
+
+    const square = indexToAlgebraic(i);
 
     if (selected === null) {
-      const p = board[i];
-      if (p && p.color === myColor) {
-        setSelected(i);
-        setLegalMoves(getLegalMoves(board, state, i));
+      const piece = chess.get(square);
+      if (piece && piece.color === myColor) {
+        setSelected(square);
+        const moves = chess.moves({ square: square, verbose: true }) as ChessMove[];
+        setLegalMoves(moves.map(m => m.to));
       }
     } else {
-      const move = legalMoves.find(m => m.to === i);
-      if (move) {
-        if (move.flags !== 'promo') {
-          const { board: testBoard, state: testState } = makeMove(board, state, move, true);
-          if (inCheck(testBoard, state.turn)) {
-            setSelected(null);
-            setLegalMoves([]);
-            return;
-          }
-        }
-        else if (move.flags === 'promo') {
-          setPromoting({ from: move.from, to: move.to });
+      if (legalMoves.includes(square)) {
+        const moves = chess.moves({ square: selected, verbose: true }) as ChessMove[];
+        const move = moves.find(m => m.to === square);
+
+        if (move && move.promotion) {
+          setPromoting({ from: selected, to: square });
         } else {
-          executeMove(move);
+          executeMove(selected, square);
         }
       }
       setSelected(null);
@@ -978,18 +695,41 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
     }
   };
 
-  // ── Optimistic execute: paint first, post later; resync on failure
-  const executeMove = async (move: Move) => {
-    if (!state || !board) return;
-
-    const { board: nb, state: ns } = makeMove(board, state, move);
-    const newFen = boardToFEN(nb, ns);
-    const outcome = detectOutcome(nb, ns);
-
-    startTransition(() => { setBoard(nb); setState(ns); });
-    lastAppliedRef.current += 1; // we expect server to append our move
-
+  const executeMove = async (from: Square, to: Square, promotion?: string) => {
     try {
+      const moveObj: any = { from, to };
+      if (promotion) moveObj.promotion = promotion;
+
+      const result = chess.move(moveObj);
+      if (!result) throw new Error('Invalid move');
+
+      const newFen = chess.fen();
+      const isCheckmate = chess.isCheckmate();
+      const isDraw = chess.isDraw();
+      const isStalemate = chess.isStalemate();
+
+      let outcome = null;
+      let reason = null;
+
+      if (isCheckmate) {
+        outcome = 'checkmate';
+        reason = chess.turn() === 'w' ? 'Black wins' : 'White wins';
+      } else if (isStalemate) {
+        outcome = 'draw';
+        reason = 'stalemate';
+      } else if (isDraw) {
+        outcome = 'draw';
+        reason = 'draw';
+      }
+
+      startTransition(() => {
+        setBoard(chessBoardToArray(chess));
+      });
+      lastAppliedRef.current += 1;
+
+      const fromIdx = algebraicToIndex(from);
+      const toIdx = algebraicToIndex(to);
+
       const res = await fetch(`${API_BASE}/games/${gameId}/move`, {
         method: 'POST',
         headers: {
@@ -997,25 +737,25 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          from: move.from,
-          to: move.to,
-          flags: move.flags || null,
-          promotion: move.promotion || null,
+          from: fromIdx,
+          to: toIdx,
+          flags: result.flags,
+          promotion: promotion || null,
           fen: newFen,
-          outcome: outcome.outcome,
-          reason: outcome.reason
+          outcome,
+          reason
         })
       });
+
       if (!res.ok) throw new Error('Move rejected');
     } catch (err) {
-      // Rollback to server truth
       await loadGameFull();
     }
   };
 
   const handlePromotion = (type: string) => {
     if (!promoting) return;
-    executeMove({ ...promoting, promotion: type } as Move);
+    executeMove(promoting.from, promoting.to, type);
     setPromoting(null);
   };
 
@@ -1028,9 +768,17 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
     if (res.ok) loadGameFull();
   };
 
-  // ── Cheap “king in check” marker (avoid running inCheck 64×)
-  const whiteInCheck = useMemo(() => (board ? inCheck(board, 'w') : false), [board, state?.turn]);
-  const blackInCheck = useMemo(() => (board ? inCheck(board, 'b') : false), [board, state?.turn]);
+  const whiteInCheck = useMemo(() => {
+    if (!chess) return false;
+    const currentTurn = chess.turn();
+    return currentTurn === 'w' && chess.inCheck();
+  }, [chess, board]);
+
+  const blackInCheck = useMemo(() => {
+    if (!chess) return false;
+    const currentTurn = chess.turn();
+    return currentTurn === 'b' && chess.inCheck();
+  }, [chess, board]);
 
   if (!game) {
     return (
@@ -1100,16 +848,15 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
               {/* Flip container; children (pieces/dots) counter-rotate to look upright */}
               <div className={`grid grid-cols-8 gap-0 border-4 border-slate-600 ${isFlipped ? 'rotate-180' : ''}`}>
                 {board.map((piece, i) => {
-                  const r = rank(i);
-                  const f = file(i);
+                  const square = indexToAlgebraic(i);
+                  const r = Math.floor(i / 8);
+                  const f = i % 8;
                   const isLight = (r + f) % 2 === 0;
-                  const isSelected = selected === i;
-                  const isLegalMove = legalMoves.some(m => m.to === i);
-                  const isCheck =
-                    piece &&
-                    piece.type === 'k' &&
-                    ((piece.color === 'w' && whiteInCheck) || (piece.color === 'b' && blackInCheck));
-
+                  const isSelected = selected === square;
+                  const isLegalMove = legalMoves.includes(square);
+                  const isCheck = piece && piece.type === 'k' &&
+                    ((piece.color === 'w' && whiteInCheck) ||
+                      (piece.color === 'b' && blackInCheck));
                   return (
                     <div
                       key={i}
@@ -1167,9 +914,9 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
             <div className="bg-slate-800 rounded-lg p-6">
               <h3 className="text-white text-xl font-semibold mb-4">Game Info</h3>
               <div className="space-y-2 text-slate-300">
-                <p><strong>Turn:</strong> {state?.turn === 'w' ? 'White' : 'Black'}</p>
+                <p><strong>Turn:</strong> {chess?.turn() === 'w' ? 'White' : 'Black'}</p>
                 <p><strong>Your Color:</strong> {myColor ? (myColor === 'w' ? 'White' : 'Black') : 'Spectating'}</p>
-                <p><strong>Move:</strong> {state?.fullmove || 1}</p>
+                <p><strong>Move:</strong> {chess?.moveNumber() || 1}</p>
                 {game.outcome && (
                   <div className="mt-4 p-4 bg-yellow-600 rounded">
                     <p className="font-bold text-white">Game Over!</p>

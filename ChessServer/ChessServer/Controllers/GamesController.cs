@@ -22,7 +22,9 @@ namespace ChessServer.Controllers
             _users = users;
         }
 
-        // POST: /api/games
+        // ─────────────────────────────────────────────────────────────────────────
+        // CREATE
+        // ─────────────────────────────────────────────────────────────────────────
         [HttpPost("games")]
         [Authorize]
         public async Task<IActionResult> CreateGame([FromBody] CreateGameDto? dto)
@@ -43,10 +45,64 @@ namespace ChessServer.Controllers
             return Ok(new { game.Id, game.Code, game.Fen, game.Status });
         }
 
-        // GET: /api/games/{id}
+        // ─────────────────────────────────────────────────────────────────────────
+        // READ (single)
+        // ─────────────────────────────────────────────────────────────────────────
         [HttpGet("games/{id:guid}")]
         [AllowAnonymous]
         public async Task<IActionResult> GetGame(Guid id)
+        {
+            var g = await _db.Games
+                .Include(x => x.Participants).ThenInclude(p => p.User)
+                .Include(x => x.History)
+                .FirstOrDefaultAsync(x => x.Id == id);
+
+            if (g is null) return NotFound();
+
+            ApplicationUser? me = null;
+            if (User?.Identity?.IsAuthenticated == true)
+                me = await _users.GetUserAsync(User);
+
+            var dto = new
+            {
+                g.Id,
+                g.Code,
+                g.Fen,
+                g.Status,
+                g.CreatedAt,
+                g.Outcome,
+                g.Reason,
+                Participants = g.Participants
+                    .Select(p => new { p.User.DisplayName, p.Color })
+                    .ToList(),
+                History = g.History
+                    .OrderBy(m => m.Index)
+                    .Select(m => new
+                    {
+                        m.Index,
+                        m.From,
+                        m.To,
+                        m.Flags,
+                        m.Promotion,
+                        m.FenAfter,
+                        m.Outcome,
+                        m.Reason
+                    })
+                    .ToList(),
+                Perspective = me == null ? null : new
+                {
+                    IsParticipant = g.Participants.Any(p => p.UserId == me.Id),
+                    MyColor = g.Participants.Where(p => p.UserId == me.Id).Select(p => p.Color).FirstOrDefault()
+                }
+            };
+
+            return Ok(dto);
+        }
+
+        // Optional: explicit read-only fetch (kept for compatibility)
+        [HttpGet("games/{id:guid}/spectate")]
+        [AllowAnonymous]
+        public async Task<IActionResult> Spectate(Guid id)
         {
             var g = await _db.Games
                 .Include(x => x.Participants).ThenInclude(p => p.User)
@@ -80,13 +136,13 @@ namespace ChessServer.Controllers
                         m.Outcome,
                         m.Reason
                     })
-                    .ToList()
+                    .ToList(),
+                IsReadOnly = true
             };
 
             return Ok(dto);
         }
 
-        // GET: /api/games/by-code/{code}
         [HttpGet("games/by-code/{code}")]
         [AllowAnonymous]
         public async Task<IActionResult> GetGameByCode(string code)
@@ -96,19 +152,40 @@ namespace ChessServer.Controllers
             return Ok(new { g.Id, g.Code, g.Fen, g.Status });
         }
 
-        // GET: /api/games/waiting
-        [HttpGet("games/waiting")]
+        // ─────────────────────────────────────────────────────────────────────────
+        // READ (list): unified endpoint with filters
+        // ─────────────────────────────────────────────────────────────────────────
+        // status: all | waiting | active | finished
+        // onlyMine: true/false
+        // q: search in code or displayName
+        [HttpGet("games")]
         [Authorize]
-        public async Task<IActionResult> GetWaitingGames()
+        public async Task<IActionResult> GetGames(
+            [FromQuery] string status = "all",
+            [FromQuery] bool onlyMine = false,
+            [FromQuery] string? q = null)
         {
-            var user = await _users.GetUserAsync(User);
-            if (user is null) return Unauthorized();
+            var me = await _users.GetUserAsync(User);
 
-            var games = await _db.Games
-                .Where(x => x.Status == "waiting"
-                            || (x.Status == "active" && x.Participants.Any(p => p.UserId == user.Id))
-                            || (x.Status == "finished" && x.Participants.Any(p => p.UserId == user.Id)))
-                .Include(x => x.Participants).ThenInclude(p => p.User)
+            IQueryable<Game> query = _db.Games
+                .Include(x => x.Participants).ThenInclude(p => p.User);
+
+            if (status is "waiting" or "active" or "finished")
+                query = query.Where(x => x.Status == status);
+
+            if (onlyMine)
+                query = query.Where(x => x.Participants.Any(p => p.UserId == me.Id));
+
+            if (!string.IsNullOrWhiteSpace(q))
+            {
+                var ql = q.ToLower();
+                query = query.Where(x =>
+                    x.Code.ToLower().Contains(ql) ||
+                    x.Participants.Any(p => (p.User.DisplayName ?? p.User.UserName).ToLower().Contains(ql)));
+            }
+
+            var rows = await query
+                .OrderByDescending(x => x.CreatedAt)
                 .Select(x => new
                 {
                     x.Id,
@@ -122,19 +199,29 @@ namespace ChessServer.Controllers
                     {
                         p.User.DisplayName,
                         p.Color
-                    }).ToList()
+                    }).ToList(),
+                    Perspective = new
+                    {
+                        IsParticipant = x.Participants.Any(p => p.UserId == me.Id),
+                        MyColor = x.Participants.Where(p => p.UserId == me.Id).Select(p => p.Color).FirstOrDefault(),
+                        CanJoinWhite = !x.Participants.Any(p => p.Color == "w") && x.Status == "waiting",
+                        CanJoinBlack = !x.Participants.Any(p => p.Color == "b") && x.Status == "waiting",
+                        IsFull = x.Participants.Count >= 2
+                    }
                 })
                 .ToListAsync();
 
-            return Ok(games);
+            return Ok(rows);
         }
 
-        // POST: /api/games/{id}/join?color=w|b
+        // ─────────────────────────────────────────────────────────────────────────
+        // JOIN: auto-assign seats; if full → spectator
+        // ─────────────────────────────────────────────────────────────────────────
         [HttpPost("games/{id:guid}/join")]
         [Authorize]
-        public async Task<IActionResult> JoinGame(Guid id, [FromQuery] string color = "w")
+        public async Task<IActionResult> JoinGame(Guid id, [FromQuery] string color = "auto")
         {
-            color = (color == "b") ? "b" : "w";
+            color = color?.ToLowerInvariant() switch { "w" => "w", "b" => "b", _ => "auto" };
 
             var g = await _db.Games
                 .Include(x => x.Participants)
@@ -144,33 +231,40 @@ namespace ChessServer.Controllers
             var user = await _users.GetUserAsync(User);
             if (user is null) return Unauthorized();
 
-            // Already in game?
-            var existing = g.Participants.FirstOrDefault(p => p.UserId == user.Id);
-            if (existing != null)
+            var me = g.Participants.FirstOrDefault(p => p.UserId == user.Id);
+            var whiteTaken = g.Participants.Any(p => p.Color == "w");
+            var blackTaken = g.Participants.Any(p => p.Color == "b");
+            var full = g.Participants.Count >= 2;
+
+            // Already in → idempotent response
+            if (me != null)
+                return Ok(new { g.Id, g.Code, role = me.Color, g.Status });
+
+            // Full → spectator
+            if (full)
+                return Ok(new { g.Id, g.Code, role = "spectator", g.Status, message = "Both seats taken. Entered as spectator." });
+
+            // Only waiting games accept new players
+            if (g.Status != "waiting")
+                return BadRequest(new { message = "Cannot join as player; game is not in 'waiting' state." });
+
+            // Seat selection
+            string chosen = color switch
             {
-                if (existing.Color == color)
-                    return Ok(new { g.Id, g.Code, color = existing.Color, g.Status });
+                "w" when !whiteTaken => "w",
+                "b" when !blackTaken => "b",
+                "auto" => !whiteTaken ? "w" : "b",
+                _ => null!
+            };
+            if (chosen is null)
+                return Conflict(new { message = $"Requested color '{color}' unavailable." });
 
-                return Conflict(new { message = "You already joined this game with the other color." });
-            }
-
-            // Color taken?
-            if (g.Participants.Any(p => p.Color == color))
-                return Conflict(new { message = $"Color '{color}' already taken." });
-
-            // Max players guard
-            if (g.Participants.Count >= 2)
-                return Conflict(new { message = "Game already has two players." });
-
-            var gp = new GameParticipant { GameId = g.Id, UserId = user.Id, Color = color };
+            var gp = new GameParticipant { GameId = g.Id, UserId = user.Id, Color = chosen };
             _db.GameParticipants.Add(gp);
 
-            // Activate when both colors present
-            if (g.Participants.Any(p => p.Color == "w") && color == "b"
-                || g.Participants.Any(p => p.Color == "b") && color == "w")
-            {
+            // Activate if we just completed the pair
+            if ((chosen == "w" && blackTaken) || (chosen == "b" && whiteTaken))
                 g.Status = "active";
-            }
 
             await _db.SaveChangesAsync();
 
@@ -179,14 +273,16 @@ namespace ChessServer.Controllers
                 type = "join",
                 gameId = g.Id,
                 player = user.DisplayName ?? user.UserName,
-                color,
+                color = chosen,
                 status = g.Status
             });
 
-            return Ok(new { g.Id, g.Code, color, g.Status });
+            return Ok(new { g.Id, g.Code, role = chosen, g.Status });
         }
 
-        // GamesController.cs — inside the controller
+        // ─────────────────────────────────────────────────────────────────────────
+        // MOVE
+        // ─────────────────────────────────────────────────────────────────────────
         [HttpPost("games/{id:guid}/move")]
         [Authorize]
         public async Task<IActionResult> PostMove(Guid id, [FromBody] MoveDto dto)
@@ -198,17 +294,19 @@ namespace ChessServer.Controllers
             if (g is null) return NotFound();
             if (g.Status != "active") return BadRequest(new { message = "Game is not active." });
 
-            // Identify caller + their color
             var user = await _users.GetUserAsync(User);
             if (user is null) return Unauthorized();
+
             var gp = g.Participants.FirstOrDefault(p => p.UserId == user.Id);
             if (gp is null) return Forbid();
 
-            var sideToMove = ActiveColorFromFen(g.Fen); // 'w' or 'b'
+            var sideToMove = ActiveColorFromFen(g.Fen);
             if (!string.Equals(gp.Color, sideToMove, StringComparison.OrdinalIgnoreCase))
-                return Forbid(); // not your move
+                return Forbid();
 
-            // (Optional) verify dto flags/promotion etc. Here we trust client move legality.
+            var nextSide = ActiveColorFromFen(dto.fen);
+            if (string.Equals(nextSide, gp.Color, StringComparison.OrdinalIgnoreCase))
+                return BadRequest(new { message = "Post-move FEN indicates same side to move; illegal transition." });
 
             var nextIdx = g.History.Count;
 
@@ -257,24 +355,29 @@ namespace ChessServer.Controllers
             return Ok(new { fen = g.Fen, g.Outcome, g.Reason });
         }
 
-        private static string ActiveColorFromFen(string fen)
-        {
-            // FEN: "pieces side ..."; side is 'w' or 'b'
-            var parts = fen.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            return (parts.Length >= 2 ? parts[1] : "w").ToLowerInvariant();
-        }
-
-        // POST: /api/games/{id}/resign?color=w|b
+        // ─────────────────────────────────────────────────────────────────────────
+        // RESIGN
+        // ─────────────────────────────────────────────────────────────────────────
         [HttpPost("games/{id:guid}/resign")]
         [Authorize]
-        public async Task<IActionResult> Resign(Guid id, [FromQuery] string color = "w")
+        public async Task<IActionResult> Resign(Guid id)
         {
-            color = (color == "b") ? "b" : "w";
-            var g = await _db.Games.FindAsync(id);
+            var g = await _db.Games
+                .Include(x => x.Participants)
+                .FirstOrDefaultAsync(x => x.Id == id);
             if (g is null) return NotFound();
+            if (g.Status != "active") return BadRequest(new { message = "Game is not active." });
+
+            var user = await _users.GetUserAsync(User);
+            if (user is null) return Unauthorized();
+
+            var gp = g.Participants.FirstOrDefault(p => p.UserId == user.Id);
+            if (gp is null) return Forbid();
+
+            var callerColor = gp.Color == "b" ? "b" : "w";
 
             g.Outcome = "resign";
-            g.Reason = color == "w" ? "Black wins" : "White wins";
+            g.Reason = callerColor == "w" ? "Black wins" : "White wins";
             g.Status = "finished";
 
             await _db.SaveChangesAsync();
@@ -285,20 +388,30 @@ namespace ChessServer.Controllers
                 gameId = g.Id,
                 outcome = g.Outcome,
                 reason = g.Reason,
-                resignedColor = color,
+                resignedColor = callerColor,
                 status = g.Status
             });
 
             return Ok(new { g.Outcome, g.Reason, g.Status });
         }
 
-        // POST: /api/games/{id}/undo
+        // ─────────────────────────────────────────────────────────────────────────
+        // UNDO (one ply)
+        // ─────────────────────────────────────────────────────────────────────────
         [HttpPost("games/{id:guid}/undo")]
         [Authorize]
         public async Task<IActionResult> Undo(Guid id)
         {
-            var g = await _db.Games.Include(x => x.History).FirstOrDefaultAsync(x => x.Id == id);
+            var g = await _db.Games
+                .Include(x => x.Participants)
+                .Include(x => x.History)
+                .FirstOrDefaultAsync(x => x.Id == id);
             if (g is null) return NotFound();
+
+            var user = await _users.GetUserAsync(User);
+            if (user is null) return Unauthorized();
+            var gp = g.Participants.FirstOrDefault(p => p.UserId == user.Id);
+            if (gp is null) return Forbid();
 
             var last = g.History.OrderByDescending(m => m.Index).FirstOrDefault();
             if (last is null) return NoContent();
@@ -306,7 +419,11 @@ namespace ChessServer.Controllers
             _db.Moves.Remove(last);
             await _db.SaveChangesAsync();
 
-            var newLast = await _db.Moves.Where(m => m.GameId == g.Id).OrderBy(m => m.Index).LastOrDefaultAsync();
+            var newLast = await _db.Moves
+                .Where(m => m.GameId == g.Id)
+                .OrderBy(m => m.Index)
+                .LastOrDefaultAsync();
+
             g.Fen = newLast?.FenAfter ?? "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
             g.Outcome = null;
             g.Reason = null;
@@ -318,13 +435,15 @@ namespace ChessServer.Controllers
                 type = "undo",
                 gameId = g.Id,
                 fen = g.Fen,
-                undoneMove = last
+                undoneMove = new { last.Index, last.From, last.To, last.Flags, last.Promotion }
             });
 
             return Ok(new { fen = g.Fen });
         }
 
-        // Optional helper: tells client hub route/group model
+        // ─────────────────────────────────────────────────────────────────────────
+        // HUB ROUTE
+        // ─────────────────────────────────────────────────────────────────────────
         [HttpPost("games/{id:guid}/connect")]
         [AllowAnonymous]
         public IActionResult GetHubRoute(Guid id)
@@ -332,10 +451,13 @@ namespace ChessServer.Controllers
             return Ok(new { hub = "/hubs/game", gameId = id.ToString() });
         }
 
-        private static string? ComputeOutcome(string fen)
+        // ─────────────────────────────────────────────────────────────────────────
+        // HELPERS
+        // ─────────────────────────────────────────────────────────────────────────
+        private static string ActiveColorFromFen(string fen)
         {
-            // TODO: Implement server-side legality/outcome if you want hard authority here.
-            return null;
+            var parts = fen.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            return (parts.Length >= 2 ? parts[1] : "w").ToLowerInvariant();
         }
 
         private static string ShortCode()
@@ -343,7 +465,6 @@ namespace ChessServer.Controllers
                .Replace("+", "").Replace("/", "").Replace("=", "")
                .Substring(0, 6);
 
-        // DTOs
         public sealed record CreateGameDto(string? Fen);
         public sealed record MoveDto(int from, int to, string? flags, string? promotion, string fen, string? outcome, string? reason);
     }
