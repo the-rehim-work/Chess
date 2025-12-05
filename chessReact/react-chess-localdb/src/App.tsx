@@ -154,20 +154,20 @@ function Auth({ onLogin }: { onLogin: (token: string, user: User) => void }) {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-emerald-900 to-slate-900 flex items-center justify-center p-4">
       <div className="bg-slate-800 rounded-lg shadow-2xl p-8 w-full max-w-md">
         <h1 className="text-3xl font-bold text-white mb-6 text-center">♟️ Chess Game</h1>
 
         <div className="flex gap-2 mb-6">
           <button
             onClick={() => setMode('login')}
-            className={`flex-1 py-2 rounded ${mode === 'login' ? 'bg-purple-600 text-white' : 'bg-slate-700 text-slate-300'}`}
+            className={`flex-1 py-2 rounded ${mode === 'login' ? 'bg-emerald-600 text-white' : 'bg-slate-700 text-slate-300'}`}
           >
             Login
           </button>
           <button
             onClick={() => setMode('register')}
-            className={`flex-1 py-2 rounded ${mode === 'register' ? 'bg-purple-600 text-white' : 'bg-slate-700 text-slate-300'}`}
+            className={`flex-1 py-2 rounded ${mode === 'register' ? 'bg-emerald-600 text-white' : 'bg-slate-700 text-slate-300'}`}
           >
             Register
           </button>
@@ -181,14 +181,14 @@ function Auth({ onLogin }: { onLogin: (token: string, user: User) => void }) {
                 placeholder="Display Name (optional)"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
-                className="w-full p-3 bg-slate-700 text-white rounded border border-slate-600 focus:border-purple-500 outline-none"
+                className="w-full p-3 bg-slate-700 text-white rounded border border-slate-600 focus:border-emerald-500 outline-none"
               />
               <input
                 type="email"
                 placeholder="Email (optional)"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full p-3 bg-slate-700 text-white rounded border border-slate-600 focus:border-purple-500 outline-none"
+                className="w-full p-3 bg-slate-700 text-white rounded border border-slate-600 focus:border-emerald-500 outline-none"
               />
             </>
           )}
@@ -197,7 +197,7 @@ function Auth({ onLogin }: { onLogin: (token: string, user: User) => void }) {
             placeholder={mode === 'login' ? 'Username or Email' : 'Username'}
             value={userName}
             onChange={(e) => setUserName(e.target.value)}
-            className="w-full p-3 bg-slate-700 text-white rounded border border-slate-600 focus:border-purple-500 outline-none"
+            className="w-full p-3 bg-slate-700 text-white rounded border border-slate-600 focus:border-emerald-500 outline-none"
             required
           />
           <input
@@ -205,13 +205,13 @@ function Auth({ onLogin }: { onLogin: (token: string, user: User) => void }) {
             placeholder="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full p-3 bg-slate-700 text-white rounded border border-slate-600 focus:border-purple-500 outline-none"
+            className="w-full p-3 bg-slate-700 text-white rounded border border-slate-600 focus:border-emerald-500 outline-none"
             required
           />
           {error && <p className={`text-sm ${error.includes('successful') ? 'text-green-400' : 'text-red-400'}`}>{error}</p>}
           <button
             type="submit"
-            className="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 rounded transition"
+            className="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-semibold py-3 rounded transition"
           >
             {mode === 'login' ? 'Login' : 'Register'}
           </button>
@@ -226,10 +226,17 @@ function Lobby({ token, user, onGameSelect }: { token: string; user: User; onGam
   const [creating, setCreating] = useState(false);
   const [joinCode, setJoinCode] = useState('');
 
-  const [statusFilter, setStatusFilter] = useState<'all' | 'waiting' | 'active' | 'finished'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'waiting' | 'active' | 'finished'>('waiting');
   const [myColorFilter, setMyColorFilter] = useState<'all' | 'w' | 'b' | 'spectating'>('all');
   const [onlyMine, setOnlyMine] = useState(false);
   const [search, setSearch] = useState('');
+
+  function resetSearch() {
+    setSearch('');
+    setStatusFilter('all');
+    setMyColorFilter('all');
+    setOnlyMine(false);
+  }
 
   const loadGames = async () => {
     const params = new URLSearchParams();
@@ -337,12 +344,17 @@ function Lobby({ token, user, onGameSelect }: { token: string; user: User; onGam
   }, [games, search, statusFilter, myColorFilter, onlyMine, user.displayName]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-8">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-emerald-900 to-slate-900 p-8">
       <div className="max-w-5xl mx-auto">
         <div className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-4xl font-bold text-white mb-2">Chess Lobby</h1>
-            <p className="text-slate-300">Welcome, {user.displayName || user.email}</p>
+            <p className="text-slate-100 text-lg">
+              Welcome,
+              <span className="ml-2 font-semibold text-amber-300 drop-shadow-[0_0_6px_rgba(251,191,36,0.35)]">
+                {user.displayName || user.email}
+              </span>
+            </p>
           </div>
           <button
             onClick={() => {
@@ -359,17 +371,17 @@ function Lobby({ token, user, onGameSelect }: { token: string; user: User; onGam
         <div className="bg-slate-800 rounded-lg p-4 mb-4 shadow-xl">
           <div className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
             <div className="md:col-span-2">
-              <label className="block text-slate-300 text-xs mb-1">Search (code or player)</label>
+              <label className="block text-slate-300 text-xs mb-1">Search</label>
               <div className="flex items-center gap-2">
                 <input
                   type="text"
-                  placeholder="e.g. ABC123 or Rahim"
+                  placeholder="Code or Player"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="w-full p-3 bg-slate-700 text-white rounded border border-slate-600 focus:border-purple-500 outline-none"
+                  className="w-full p-3 bg-slate-700 text-white rounded border border-slate-600 focus:border-emerald-500 outline-none"
                 />
                 <button
-                  onClick={() => setSearch('')}
+                  onClick={() => resetSearch()}
                   className="px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded text-slate-200"
                   title="Clear"
                 >
@@ -383,7 +395,7 @@ function Lobby({ token, user, onGameSelect }: { token: string; user: User; onGam
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value as any)}
-                className="w-full p-3 bg-slate-700 text-white rounded border border-slate-600 focus:border-purple-500 outline-none"
+                className="w-full p-3 bg-slate-700 text-white rounded border border-slate-600 focus:border-emerald-500 outline-none"
               >
                 <option value="all">All</option>
                 <option value="waiting">Waiting</option>
@@ -397,7 +409,7 @@ function Lobby({ token, user, onGameSelect }: { token: string; user: User; onGam
               <select
                 value={myColorFilter}
                 onChange={(e) => setMyColorFilter(e.target.value as any)}
-                className="w-full p-3 bg-slate-700 text-white rounded border border-slate-600 focus:border-purple-500 outline-none"
+                className="w-full p-3 bg-slate-700 text-white rounded border border-slate-600 focus:border-emerald-500 outline-none"
               >
                 <option value="all">All</option>
                 <option value="w">White</option>
@@ -412,7 +424,7 @@ function Lobby({ token, user, onGameSelect }: { token: string; user: User; onGam
                   type="checkbox"
                   checked={onlyMine}
                   onChange={(e) => setOnlyMine(e.target.checked)}
-                  className="accent-purple-600"
+                  className="accent-emerald-600"
                 />
                 Only my games
               </label>
@@ -427,7 +439,7 @@ function Lobby({ token, user, onGameSelect }: { token: string; user: User; onGam
             <button
               onClick={createGame}
               disabled={creating}
-              className="flex-1 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-800 text-white font-semibold py-3 rounded transition"
+              className="flex-1 bg-cyan-600 hover:bg-cyan-700 disabled:bg-cyan-800 text-white font-semibold py-3 rounded transition"
             >
               {creating ? 'Creating...' : 'Create New Game'}
             </button>
@@ -437,7 +449,7 @@ function Lobby({ token, user, onGameSelect }: { token: string; user: User; onGam
                 placeholder="Game Code"
                 value={joinCode}
                 onChange={(e) => setJoinCode(e.target.value)}
-                className="flex-1 p-3 bg-slate-700 text-white rounded border border-slate-600 focus:border-purple-500 outline-none"
+                className="flex-1 p-3 bg-slate-700 text-white rounded border border-slate-600 focus:border-emerald-500 outline-none"
               />
               <button
                 onClick={joinByCode}
@@ -453,67 +465,88 @@ function Lobby({ token, user, onGameSelect }: { token: string; user: User; onGam
         <div className="bg-slate-800 rounded-lg p-6 shadow-xl">
           <h2 className="text-xl font-semibold text-white mb-4">Available Games</h2>
 
-          {filtered.length === 0 ? (
-            <p className="text-slate-400 text-center py-8">No games match your filters. Create one or loosen the filters.</p>
-          ) : (
-            <div className="space-y-3">
-              {filtered.map(g => {
-                const me = g.participants.find(p => p.displayName === user.displayName);
-                const myColor = me?.color;
-                const finished = !!g.outcome;
-                const winner = winnerOf(g);
-                const subline = finished
-                  ? (winner ? `Finished • Winner: ${winner}` : 'Finished • Draw')
-                  : `${g.status} • ${g.participants.length}/2 players`;
+          {filtered.map(g => {
+            const me = g.participants.find(p => p.displayName === user.displayName);
+            const myColor = me?.color;
+            const finished = !!g.outcome;
+            const waiting = g.status === 'waiting' || g.participants.length < 2;
+            const winner = winnerOf(g);
+            const iWon = winner === "White" && myColor === "w" || winner === "Black" && myColor === "b";
+            const iLost = finished && myColor && !iWon && winner;
 
-                const actionLabel =
-                  finished ? 'View' :
-                    myColor ? 'Resume' : 'Join';
+            const subline = finished
+              ? (winner ? `Finished • Winner: ${winner}` : 'Finished • Draw')
+              : `${g.status} • ${g.participants.length}/2 players`;
 
-                return (
-                  <div
-                    key={g.id}
-                    className={`bg-slate-700 rounded p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3 hover:bg-slate-600 transition`}
+            const statusColorClass = finished
+              ? 'text-purple-400'
+              : waiting
+                ? 'text-green-400'
+                : 'text-cyan-400';
+
+            const myColorClass = iWon
+              ? 'text-green-400'
+              : iLost
+                ? 'text-red-400'
+                : 'text-cyan-400';
+
+            const iAmIn = !!myColor;
+            const isFull = g.participants.length >= 2;
+
+            let actionLabel: string;
+            let buttonClass: string;
+
+            if (finished) {
+              actionLabel = 'View';
+              buttonClass = 'bg-purple-600 hover:bg-purple-700';
+            } else if (iAmIn) {
+              actionLabel = 'Resume';
+              buttonClass = waiting ? 'bg-green-600 hover:bg-green-700' : 'bg-cyan-600 hover:bg-cyan-700';
+            } else if (isFull) {
+              actionLabel = 'Spectate';
+              buttonClass = 'bg-slate-600 hover:bg-slate-500';
+            } else {
+              actionLabel = 'Join';
+              buttonClass = 'bg-green-600 hover:bg-green-700';
+            }
+
+            return (
+              <div
+                key={g.id}
+                className="bg-slate-700 rounded p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3 hover:bg-slate-600 transition mb-4"
+              >
+                <div>
+                  <p className="text-white font-semibold">Game {g.code}</p>
+                  <p className={`text-sm ${statusColorClass}`}>
+                    {subline}
+                    {g.participants.length > 0 && !finished && (
+                      <> • {g.participants.map(p => p.displayName).join(', ')}</>
+                    )}
+                    {finished && g.reason && <>, {g.reason}</>}
+                  </p>
+                  {myColor && (
+                    <p className={`text-xs mt-1 ${myColorClass}`}>
+                      You are {myColor === 'w' ? 'White' : 'Black'}
+                    </p>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      if (!iAmIn && isFull) {
+                        onGameSelect(g.id, true);
+                      } else {
+                        onGameSelect(g.id);
+                      }
+                    }}
+                    className={`px-4 py-2 text-white rounded transition ${buttonClass}`}
                   >
-                    <div>
-                      <p className="text-white font-semibold">Game {g.code}</p>
-                      <p className="text-slate-300 text-sm">
-                        {subline}
-                        {g.participants.length > 0 && !finished && (
-                          <> • {g.participants.map(p => p.displayName).join(', ')}</>
-                        )}
-                        {finished && g.reason && <>, {g.reason}</>}
-                      </p>
-                      {myColor && (
-                        <p className="text-xs text-slate-400 mt-1">You are {myColor === 'w' ? 'White' : 'Black'}</p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => {
-                          const iAmIn = g.participants.some(p => p.displayName === user.displayName);
-                          const isFull = g.participants.length >= 2;
-
-                          if (!iAmIn && isFull) {
-                            onGameSelect(g.id, true);
-                          } else {
-                            onGameSelect(g.id);
-                          }
-                        }}
-                        className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded transition"
-                      >
-                        {finished
-                          ? 'View'
-                          : myColor
-                            ? 'Resume'
-                            : (g.participants.length >= 2 ? 'Spectate' : 'Join')}
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+                    {actionLabel}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
@@ -528,6 +561,7 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
   const [legalMoves, setLegalMoves] = useState<Square[]>([]);
   const [promoting, setPromoting] = useState<{ from: Square; to: Square } | null>(null);
   const [selected, setSelected] = useState<Square | null>(null);
+  const [lastMove, setLastMove] = useState<{ from: number; to: number } | null>(null);
 
   const isSpectating = useMemo(() => {
     if (!game) return false;
@@ -601,6 +635,13 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
     if (!res.ok) return;
     const g: Game = await res.json();
     setGame(g);
+
+    if (g.history && g.history.length > 0) {
+      const last = g.history[g.history.length - 1];
+      setLastMove({ from: last.from, to: last.to });
+    } else {
+      setLastMove(null);
+    }
 
     chess.load(g.fen);
     setBoard(chessBoardToArray(chess));
@@ -726,6 +767,7 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
         setBoard(chessBoardToArray(chess));
       });
       lastAppliedRef.current += 1;
+      setLastMove({ from: algebraicToIndex(from), to: algebraicToIndex(to) });
 
       const fromIdx = algebraicToIndex(from);
       const toIdx = algebraicToIndex(to);
@@ -782,14 +824,14 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
 
   if (!game) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-emerald-900 to-slate-900 flex items-center justify-center">
         <p className="text-white text-2xl">Loading...</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-8">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-emerald-900 to-slate-900 p-8">
       <div className="max-w-6xl mx-auto">
         <div className="flex justify-between items-center mb-6">
           <button
@@ -798,18 +840,25 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
           >
             ← Back to Lobby
           </button>
-          <div className="text-white text-center">
-            <h2 className="text-2xl font-bold">Game {game.code}</h2>
-            <p className="text-slate-300">Status: {game.status}</p>
+          <div className="bg-slate-800 rounded-lg px-6 py-3 text-center">
+            <h2 className="text-2xl font-bold text-white">Game {game.code}</h2>
+            {(() => {
+              const finished = !!game.outcome;
+              const waiting = game.status === 'waiting' || game.participants.length < 2;
+              const statusClass = finished ? 'text-purple-400' : waiting ? 'text-green-400' : 'text-cyan-400';
+              return <p className={`text-sm ${statusClass}`}>Status: {game.status}</p>;
+            })()}
           </div>
-          {game.status === 'active' && myColor && !isSpectating && (
-            <button
-              onClick={resign}
-              className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded"
-            >
-              Resign
-            </button>
-          )}
+          <div className="w-[88px]">
+            {game.status === 'active' && myColor && !isSpectating && (
+              <button
+                onClick={resign}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded"
+              >
+                Resign
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -845,44 +894,93 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
             )}
 
             <div className="bg-slate-800 rounded-lg p-6 inline-block">
-              {/* Flip container; children (pieces/dots) counter-rotate to look upright */}
-              <div className={`grid grid-cols-8 gap-0 border-4 border-slate-600 ${isFlipped ? 'rotate-180' : ''}`}>
-                {board.map((piece, i) => {
-                  const square = indexToAlgebraic(i);
-                  const r = Math.floor(i / 8);
-                  const f = i % 8;
-                  const isLight = (r + f) % 2 === 0;
-                  const isSelected = selected === square;
-                  const isLegalMove = legalMoves.includes(square);
-                  const isCheck = piece && piece.type === 'k' &&
-                    ((piece.color === 'w' && whiteInCheck) ||
-                      (piece.color === 'b' && blackInCheck));
+              <div className="relative">
+                <div className={`grid grid-cols-8 gap-0 border-4 border-slate-600 ${isFlipped ? 'rotate-180' : ''}`}>
+                  {board.map((piece, i) => {
+                    const square = indexToAlgebraic(i);
+                    const r = Math.floor(i / 8);
+                    const f = i % 8;
+                    const isLight = (r + f) % 2 === 0;
+                    const isSelected = selected === square;
+                    const isLegalMove = legalMoves.includes(square);
+                    const isCheck = piece && piece.type === 'k' &&
+                      ((piece.color === 'w' && whiteInCheck) ||
+                        (piece.color === 'b' && blackInCheck));
+                    return (
+                      <div
+                        key={i}
+                        onClick={() => handleSquareClick(i)}
+                        className={`w-16 h-16 flex items-center justify-center cursor-pointer relative
+              ${isLight ? 'bg-amber-100' : 'bg-amber-800'}
+              ${isSelected ? 'ring-4 ring-yellow-400' : ''}
+              ${isCheck ? 'bg-red-500' : ''}
+              hover:opacity-80 transition`}
+                      >
+                        {piece && (
+                          <img
+                            src={getPieceImage(piece)}
+                            alt={`${piece.color} ${piece.type}`}
+                            className={`w-12 h-12 ${isFlipped ? 'rotate-180' : ''}`}
+                          />
+                        )}
+                        {isLegalMove && (
+                          <div
+                            className={`absolute w-4 h-4 rounded-full ${isFlipped ? 'rotate-180' : ''} ${piece ? 'border-4 border-green-500' : 'bg-green-500 opacity-50'}`}
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {lastMove && (() => {
+                  const fromX = file(lastMove.from) * 64 + 32 + 4;
+                  const fromY = rank(lastMove.from) * 64 + 32 + 4;
+                  const toX = file(lastMove.to) * 64 + 32 + 4;
+                  const toY = rank(lastMove.to) * 64 + 32 + 4;
+
+                  const dx = toX - fromX;
+                  const dy = toY - fromY;
+                  const distance = Math.sqrt(dx * dx + dy * dy);
+
+                  const minMarker = 4;
+                  const maxMarker = 12;
+                  const markerSize = Math.min(maxMarker, Math.max(minMarker, distance / 15));
+
                   return (
-                    <div
-                      key={i}
-                      onClick={() => handleSquareClick(i)}
-                      className={`w-16 h-16 flex items-center justify-center cursor-pointer relative
-                        ${isLight ? 'bg-amber-100' : 'bg-amber-800'}
-                        ${isSelected ? 'ring-4 ring-yellow-400' : ''}
-                        ${isCheck ? 'bg-red-500' : ''}
-                        hover:opacity-80 transition`}
+                    <svg
+                      className={`absolute inset-0 pointer-events-none ${isFlipped ? 'rotate-180' : ''}`}
+                      viewBox="0 0 520 520"
+                      style={{ width: '100%', height: '100%' }}
                     >
-                      {piece && (
-                        <img
-                          src={getPieceImage(piece)}
-                          alt={`${piece.color} ${piece.type}`}
-                          className={`w-12 h-12 ${isFlipped ? 'rotate-180' : ''}`}
-                        />
-                      )}
-                      {isLegalMove && (
-                        <div
-                          className={`absolute w-4 h-4 rounded-full ${isFlipped ? 'rotate-180' : ''} ${piece ? 'border-4 border-green-500' : 'bg-green-500 opacity-50'
-                            }`}
-                        />
-                      )}
-                    </div>
+                      <defs>
+                        <marker
+                          id="arrowhead"
+                          markerWidth={markerSize}
+                          markerHeight={markerSize * 0.7}
+                          refX={markerSize - 1}
+                          refY={markerSize * 0.35}
+                          orient="auto"
+                        >
+                          <polygon
+                            points={`0 0, ${markerSize} ${markerSize * 0.35}, 0 ${markerSize * 0.7}`}
+                            fill="rgba(34, 197, 94, 0.8)"
+                          />
+                        </marker>
+                      </defs>
+                      <line
+                        x1={fromX}
+                        y1={fromY}
+                        x2={toX}
+                        y2={toY}
+                        stroke="rgba(34, 197, 94, 0.8)"
+                        strokeWidth={6}
+                        strokeLinecap="round"
+                        markerEnd="url(#arrowhead)"
+                      />
+                    </svg>
                   );
-                })}
+                })()}
               </div>
             </div>
 
@@ -914,15 +1012,29 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
             <div className="bg-slate-800 rounded-lg p-6">
               <h3 className="text-white text-xl font-semibold mb-4">Game Info</h3>
               <div className="space-y-2 text-slate-300">
-                <p><strong>Turn:</strong> {chess?.turn() === 'w' ? 'White' : 'Black'}</p>
+                <p>
+                  <strong>Turn:</strong>{' '}
+                  <span className={chess?.turn() === myColor ? 'text-green-400' : 'text-white'}>
+                    {chess?.turn() === 'w' ? 'White' : 'Black'}
+                  </span>
+                </p>
                 <p><strong>Your Color:</strong> {myColor ? (myColor === 'w' ? 'White' : 'Black') : 'Spectating'}</p>
                 <p><strong>Move:</strong> {chess?.moveNumber() || 1}</p>
-                {game.outcome && (
-                  <div className="mt-4 p-4 bg-yellow-600 rounded">
-                    <p className="font-bold text-white">Game Over!</p>
-                    <p className="text-white">{game.reason}</p>
-                  </div>
-                )}
+                {game.outcome && (() => {
+                  const winner = game.reason?.toLowerCase().includes('white wins') ? 'White'
+                    : game.reason?.toLowerCase().includes('black wins') ? 'Black'
+                      : null;
+                  const iWon = (winner === 'White' && myColor === 'w') || (winner === 'Black' && myColor === 'b');
+                  const iLost = myColor && winner && !iWon;
+                  const resultClass = iWon ? 'bg-green-600' : iLost ? 'bg-red-600' : 'bg-purple-600';
+
+                  return (
+                    <div className={`mt-4 p-4 rounded ${resultClass}`}>
+                      <p className="font-bold text-white">Game Over!</p>
+                      <p className="text-white">{game.reason}</p>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
 
