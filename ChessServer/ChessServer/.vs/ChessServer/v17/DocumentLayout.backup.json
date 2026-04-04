@@ -3,8 +3,8 @@
   "WorkspaceRootPath": "C:\\Users\\samid.sixaliyev\\source\\repos\\Chess\\ChessServer\\ChessServer\\",
   "Documents": [
     {
-      "AbsoluteMoniker": "D:0:0:{49C8D176-52D0-AA88-777D-35C9928D5FED}|ChessServer.csproj|c:\\users\\samid.sixaliyev\\source\\repos\\chess\\chessserver\\chessserver\\appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}",
-      "RelativeMoniker": "D:0:0:{49C8D176-52D0-AA88-777D-35C9928D5FED}|ChessServer.csproj|solutionrelative:appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}"
+      "AbsoluteMoniker": "D:0:0:{49C8D176-52D0-AA88-777D-35C9928D5FED}|ChessServer.csproj|c:\\users\\samid.sixaliyev\\source\\repos\\chess\\chessserver\\chessserver\\data\\entities.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{49C8D176-52D0-AA88-777D-35C9928D5FED}|ChessServer.csproj|solutionrelative:data\\entities.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     }
   ],
   "DocumentGroupContainers": [
@@ -27,14 +27,14 @@
             {
               "$type": "Document",
               "DocumentIndex": 0,
-              "Title": "appsettings.json",
-              "DocumentMoniker": "C:\\Users\\samid.sixaliyev\\source\\repos\\Chess\\ChessServer\\ChessServer\\appsettings.json",
-              "RelativeDocumentMoniker": "appsettings.json",
-              "ToolTip": "C:\\Users\\samid.sixaliyev\\source\\repos\\Chess\\ChessServer\\ChessServer\\appsettings.json",
-              "RelativeToolTip": "appsettings.json",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAwAAAAvAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001642|",
-              "WhenOpened": "2025-12-04T07:11:53.296Z",
+              "Title": "Entities.cs",
+              "DocumentMoniker": "C:\\Users\\samid.sixaliyev\\source\\repos\\Chess\\ChessServer\\ChessServer\\Data\\Entities.cs",
+              "RelativeDocumentMoniker": "Data\\Entities.cs",
+              "ToolTip": "C:\\Users\\samid.sixaliyev\\source\\repos\\Chess\\ChessServer\\ChessServer\\Data\\Entities.cs",
+              "RelativeToolTip": "Data\\Entities.cs",
+              "ViewState": "AgIAANoAAAAAAAAAAAAkwPoAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-12-05T07:53:54.655Z",
               "EditorCaption": ""
             }
           ]

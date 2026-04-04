@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { X } from 'lucide-react';
 import ChatDock from './chat/chatDock.tsx';
+import { API_BASE } from './apiOrigin.ts';
 import { Chess, type Square, Move as ChessMove } from 'chess.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -72,8 +73,6 @@ interface ChatThread {
 // ═══════════════════════════════════════════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
-const API_BASE = 'http://172.22.111.136:7000/api';
-
 const KNIGHT = [[-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1]];
 const KING = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]];
 const ROOK_DIR = [[1, 0], [-1, 0], [0, 1], [0, -1]];

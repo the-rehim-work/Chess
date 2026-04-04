@@ -351,3 +351,4 @@ C:\Users\samid.sixaliyev\source\repos\Chess\ChessServer\ChessServer\obj\Debug\ne
 C:\Users\samid.sixaliyev\source\repos\Chess\ChessServer\ChessServer\obj\Debug\net8.0\ChessServer.pdb
 C:\Users\samid.sixaliyev\source\repos\Chess\ChessServer\ChessServer\obj\Debug\net8.0\ChessServer.genruntimeconfig.cache
 C:\Users\samid.sixaliyev\source\repos\Chess\ChessServer\ChessServer\obj\Debug\net8.0\ref\ChessServer.dll
+C:\Users\samid.sixaliyev\source\repos\Chess\ChessServer\ChessServer\obj\Debug\net8.0\swae.build.ex.cache

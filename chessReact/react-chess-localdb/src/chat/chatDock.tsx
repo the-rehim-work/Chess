@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useRef, useState, startTransition } from 'react';
 import { MessageCircle, X, Send, Search, ChevronLeft } from 'lucide-react';
 import * as signalR from '@microsoft/signalr';
+import { API_BASE, CHAT_HUB_URL } from '../apiOrigin.ts';
 
 type MinimalUser = {
   id: string;
@@ -45,9 +46,6 @@ type Props = {
   user: MinimalUser;
   onLogout?: () => void;
 };
-
-const API_BASE = 'http://172.22.111.136:7000/api';
-const HUB_URL = 'http://172.22.111.136:7000/hubs/chat';
 
 const ENDPOINTS = {
   listThreads: () => `${API_BASE}/chat/threads`, // GET
@@ -139,7 +137,7 @@ export default function ChatDock({ token, user, onLogout }: Props) {
 
   useEffect(() => {
     const conn = new signalR.HubConnectionBuilder()
-      .withUrl(HUB_URL, { accessTokenFactory: () => token })
+      .withUrl(CHAT_HUB_URL, { accessTokenFactory: () => token })
       .withAutomaticReconnect()
       .build();
 

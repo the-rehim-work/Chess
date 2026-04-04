@@ -5,12 +5,11 @@
       "Microsoft.AspNetCore": "Warning"
     }
   },
-  "AllowedHosts": "*",
   "ConnectionStrings": {
-    "Default": "Server=555-PTS;Database=Chess;User Id=dbuser;Password=Admin123@;TrustServerCertificate=True;"
+    "Default": ""
   },
   "Jwt": {
-    "Key": "CHANGE_ME_SUPER_SECRET_256BIT_MIN",
+    "Key": "",
     "Issuer": "ChessServer",
     "Audience": "ChessClient"
   },
@@ -18,8 +17,5 @@
     "Origins": [
       "http://chesss.runasp.net"
     ]
-  },
-  "Seed": {
-    "Admin": { "UserName": "admin", "Email": "admin@chess.local", "Pass": "Admin!123" }
   }
 }

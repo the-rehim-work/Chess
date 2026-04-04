@@ -5059,11 +5059,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "c:\\Users\\samid.sixaliyev\\source\\repos\\Chess\\ChessServer\\ChessServer\\ChessServer.csproj",
+      "projectUniqueName": "C:\\Users\\samid.sixaliyev\\source\\repos\\Chess\\ChessServer\\ChessServer\\ChessServer.csproj",
       "projectName": "ChessServer",
-      "projectPath": "c:\\Users\\samid.sixaliyev\\source\\repos\\Chess\\ChessServer\\ChessServer\\ChessServer.csproj",
+      "projectPath": "C:\\Users\\samid.sixaliyev\\source\\repos\\Chess\\ChessServer\\ChessServer\\ChessServer.csproj",
       "packagesPath": "C:\\Users\\samid.sixaliyev\\.nuget\\packages\\",
-      "outputPath": "c:\\Users\\samid.sixaliyev\\source\\repos\\Chess\\ChessServer\\ChessServer\\obj\\",
+      "outputPath": "C:\\Users\\samid.sixaliyev\\source\\repos\\Chess\\ChessServer\\ChessServer\\obj\\",
       "projectStyle": "PackageReference",
       "fallbackFolders": [
         "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
@@ -5078,6 +5078,7 @@
       ],
       "sources": {
         "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
+        "C:\\Program Files\\dotnet\\library-packs": {},
         "https://api.nuget.org/v3/index.json": {}
       },
       "frameworks": {
@@ -5096,7 +5097,7 @@
         "auditLevel": "low",
         "auditMode": "direct"
       },
-      "SdkAnalysisLevel": "9.0.300"
+      "SdkAnalysisLevel": "10.0.200"
     },
     "frameworks": {
       "net8.0": {
@@ -5154,7 +5155,7 @@
             "privateAssets": "all"
           }
         },
-        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.305/PortableRuntimeIdentifierGraph.json"
+        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.201/PortableRuntimeIdentifierGraph.json"
       }
     }
   }
