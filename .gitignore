@@ -29,11 +29,9 @@ dist-ssr
 **/.vs/
 *.user
 
-# Environment files
+# Environment files (mode files .env.development / .env.production are tracked)
 .env
-.env.*
-!.env.example
+.env.local
+.env.*.local
 
-# App settings overrides (copy from *.example)
-**/appsettings.Development.json
-**/appsettings.Production.json
+# App settings: Development + Production are tracked; use User Secrets or *.local.json for machine-only overrides if you add them later

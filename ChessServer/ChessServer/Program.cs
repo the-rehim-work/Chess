@@ -9,12 +9,7 @@ using Microsoft.IdentityModel.Tokens;
 var builder = WebApplication.CreateBuilder(args);
 
 var origins = builder.Configuration.GetSection("Cors:Origins").Get<string[]>() ??
-              new[]
-              {
-                  "http://localhost:5173",
-                  "http://127.0.0.1:5173",
-                  "http://chesss.runasp.net"
-              };
+              new[] { "http://localhost:5173", "http://127.0.0.1:5173" };
 
 var jwtKey = builder.Configuration["Jwt:Key"] ?? throw new InvalidOperationException("Jwt:Key missing");
 var jwtIssuer = builder.Configuration["Jwt:Issuer"];
