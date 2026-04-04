@@ -31,7 +31,5 @@ dist-ssr
 
 # Environment files (mode files .env.development / .env.production are tracked)
 .env
-.env.local
-.env.*.local
-
-# App settings: Development + Production are tracked; use User Secrets or *.local.json for machine-only overrides if you add them later
+*.env.development
+*.env.production
