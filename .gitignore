@@ -1,38 +1,55 @@
-# Logs
-logs
+# Visual Studio / Rider
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.cache
+*.ide*
+
+# .NET build outputs
+[Bb]in/
+[Oo]bj/
+**/[Bb]in/
+**/[Oo]bj/
+*.exe
+*.dll
+*.pdb
+*.runtimeconfig.dev.json
+*.hmap
 *.log
+
+# ASP.NET / Entity Framework
+*.db
+*.db-journal
+appsettings.Local.json
+appsettings.*.Local.json
+
+# NuGet packages
+*.nupkg
+packages/
+**/packages/
+
+# Node / frontend
+node_modules/
+dist/
+.vite/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
-lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
+# Environment files
+.env.local
+.env.*.local
 
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-
-# .NET
-**/ChessServer/bin/
-**/ChessServer/obj/
-**/ChessServer/.vs/
-*.user
-
-**/ChessServer/appsettings.Production.json
-**/ChessServer/appsettings.Development.json
-
-# Environment files (mode files .env.development / .env.production are tracked)
-.env
-*.env.development
-*.env.production
+# IDE/editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*.tmp
+*.temp
+*.DS_Store
+Thumbs.db
+desktop.ini
