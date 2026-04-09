@@ -384,7 +384,12 @@ export default function ChatDock({ token, user, onLogout }: Props) {
       {/* Toggle Button */}
       <button
         onClick={() => setOpen(v => !v)}
-        className={clsx('fixed bottom-4 right-4 z-50 rounded-full shadow-lg', 'bg-purple-600 hover:bg-purple-700 text-white', 'w-14 h-14 flex items-center justify-center')}
+        className={clsx(
+          'fixed z-50 rounded-full shadow-lg',
+          'bottom-[max(1rem,env(safe-area-inset-bottom,0px))] right-[max(1rem,env(safe-area-inset-right,0px))]',
+          'bg-purple-600 hover:bg-purple-700 text-white',
+          'w-14 h-14 min-w-[3.5rem] min-h-[3.5rem] flex items-center justify-center touch-manipulation'
+        )}
         aria-label="Open chat"
         title="Chat"
       >
@@ -400,13 +405,20 @@ export default function ChatDock({ token, user, onLogout }: Props) {
 
       {/* Dock Panel */}
       {open && (
-        <div className="fixed bottom-20 right-4 z-50 w-[400px] max-h-[85vh] bg-slate-800 text-slate-100 rounded-2xl shadow-2xl border border-slate-700 flex flex-col">
+        <div
+          className={clsx(
+            'fixed z-50 max-h-[min(85vh,100dvh)] min-h-0 bg-slate-800 text-slate-100 rounded-2xl shadow-2xl border border-slate-700 flex flex-col',
+            'left-4 right-4 bottom-[max(5.5rem,env(safe-area-inset-bottom,0px)+4.5rem)] w-auto max-w-none',
+            'sm:left-auto sm:right-[max(1rem,env(safe-area-inset-right,0px))] sm:bottom-[max(5rem,env(safe-area-inset-bottom,0px)+1rem)] sm:w-[400px] sm:max-w-[calc(100vw-2rem)]'
+          )}
+        >
           {/* Header */}
           <div className="px-4 py-3 border-b border-slate-700 flex items-center justify-between">
             <div className="flex items-center gap-2">
               {view === 'chat' && (
                 <button
-                  className="p-1 rounded hover:bg-slate-700"
+                  type="button"
+                  className="p-2 min-w-[40px] min-h-[40px] rounded hover:bg-slate-700 touch-manipulation flex items-center justify-center"
                   onClick={() => { setView('threads'); setActiveWith(null); }}
                   title="Back"
                 >
@@ -416,7 +428,7 @@ export default function ChatDock({ token, user, onLogout }: Props) {
               <span className="font-semibold">Messages</span>
               <span className="text-xs opacity-60">({user.userName})</span>
             </div>
-            <button className="p-1 rounded hover:bg-slate-700" onClick={() => setOpen(false)} aria-label="Close">
+            <button type="button" className="p-2 min-w-[40px] min-h-[40px] rounded hover:bg-slate-700 touch-manipulation flex items-center justify-center" onClick={() => setOpen(false)} aria-label="Close">
               <X size={18} />
             </button>
           </div>
@@ -444,11 +456,12 @@ export default function ChatDock({ token, user, onLogout }: Props) {
                       value={searchQ}
                       onChange={(e) => setSearchQ(e.target.value)}
                       placeholder="Search username…"
-                      className="flex-1 bg-transparent outline-none text-sm py-2"
+                      className="flex-1 min-w-0 bg-transparent outline-none text-base py-2"
                     />
                   </div>
                   <button
-                    className="px-3 py-2 bg-purple-600 hover:bg-purple-700 rounded text-sm disabled:opacity-50"
+                    type="button"
+                    className="shrink-0 min-h-[44px] px-3 py-2 bg-purple-600 hover:bg-purple-700 rounded text-sm disabled:opacity-50 touch-manipulation"
                     onClick={() => searchQ.trim().length >= 2 && openThread(searchQ.trim())}
                     disabled={searchQ.trim().length < 2}
                   >
@@ -537,11 +550,12 @@ export default function ChatDock({ token, user, onLogout }: Props) {
                     }}
                     placeholder="Type a message… (Enter to send, Shift+Enter newline)"
                     rows={2}
-                    className="flex-1 bg-slate-700 text-white rounded p-2 text-sm outline-none resize-none"
+                    className="flex-1 min-w-0 min-h-[44px] bg-slate-700 text-white rounded p-2 text-base outline-none resize-none"
                   />
                   <button
+                    type="button"
                     onClick={sendMessage}
-                    className="p-2 rounded bg-purple-600 hover:bg-purple-700 disabled:bg-slate-600 disabled:cursor-not-allowed"
+                    className="shrink-0 min-w-[44px] min-h-[44px] p-2 rounded bg-purple-600 hover:bg-purple-700 disabled:bg-slate-600 disabled:cursor-not-allowed touch-manipulation flex items-center justify-center"
                     disabled={!msgInput.trim() || !activeWith}
                     title="Send"
                   >

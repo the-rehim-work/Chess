@@ -180,14 +180,14 @@ function Auth({ onLogin }: { onLogin: (token: string, user: User) => void }) {
                 placeholder="Display Name (optional)"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
-                className="w-full p-3 bg-slate-700 text-white rounded border border-slate-600 focus:border-emerald-500 outline-none"
+                className="w-full p-3 text-base bg-slate-700 text-white rounded border border-slate-600 focus:border-emerald-500 outline-none"
               />
               <input
                 type="email"
                 placeholder="Email (optional)"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full p-3 bg-slate-700 text-white rounded border border-slate-600 focus:border-emerald-500 outline-none"
+                className="w-full p-3 text-base bg-slate-700 text-white rounded border border-slate-600 focus:border-emerald-500 outline-none"
               />
             </>
           )}
@@ -196,7 +196,7 @@ function Auth({ onLogin }: { onLogin: (token: string, user: User) => void }) {
             placeholder={mode === 'login' ? 'Username or Email' : 'Username'}
             value={userName}
             onChange={(e) => setUserName(e.target.value)}
-            className="w-full p-3 bg-slate-700 text-white rounded border border-slate-600 focus:border-emerald-500 outline-none"
+            className="w-full p-3 text-base bg-slate-700 text-white rounded border border-slate-600 focus:border-emerald-500 outline-none"
             required
           />
           <input
@@ -204,13 +204,13 @@ function Auth({ onLogin }: { onLogin: (token: string, user: User) => void }) {
             placeholder="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full p-3 bg-slate-700 text-white rounded border border-slate-600 focus:border-emerald-500 outline-none"
+            className="w-full p-3 text-base bg-slate-700 text-white rounded border border-slate-600 focus:border-emerald-500 outline-none"
             required
           />
           {error && <p className={`text-sm ${error.includes('successful') ? 'text-green-400' : 'text-red-400'}`}>{error}</p>}
           <button
             type="submit"
-            className="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-semibold py-3 rounded transition"
+            className="w-full min-h-[48px] bg-cyan-600 hover:bg-cyan-700 text-white font-semibold py-3 rounded transition touch-manipulation"
           >
             {mode === 'login' ? 'Login' : 'Register'}
           </button>
@@ -343,12 +343,12 @@ function Lobby({ token, user, onGameSelect }: { token: string; user: User; onGam
   }, [games, search, statusFilter, myColorFilter, onlyMine, user.displayName]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-emerald-900 to-slate-900 p-8">
-      <div className="max-w-5xl mx-auto">
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <h1 className="text-4xl font-bold text-white mb-2">Chess Lobby</h1>
-            <p className="text-slate-100 text-lg">
+    <div className="min-h-screen min-h-[100dvh] bg-gradient-to-br from-slate-900 via-emerald-900 to-slate-900 px-4 py-4 sm:p-8 pb-[max(1.5rem,env(safe-area-inset-bottom,0px)+1rem)]">
+      <div className="max-w-5xl mx-auto w-full min-w-0">
+        <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-start mb-6 sm:mb-8">
+          <div className="min-w-0">
+            <h1 className="text-2xl sm:text-4xl font-bold text-white mb-2">Chess Lobby</h1>
+            <p className="text-slate-100 text-base sm:text-lg break-words">
               Welcome,
               <span className="ml-2 font-semibold text-amber-300 drop-shadow-[0_0_6px_rgba(251,191,36,0.35)]">
                 {user.displayName || user.email}
@@ -360,16 +360,16 @@ function Lobby({ token, user, onGameSelect }: { token: string; user: User; onGam
               localStorage.clear();
               window.location.reload();
             }}
-            className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded"
+            className="shrink-0 self-start sm:self-auto px-4 py-2.5 min-h-[44px] bg-slate-700 hover:bg-slate-600 text-white rounded touch-manipulation"
           >
             Logout
           </button>
         </div>
 
         {/* ── NEW: Filters */}
-        <div className="bg-slate-800 rounded-lg p-4 mb-4 shadow-xl">
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
-            <div className="md:col-span-2">
+        <div className="bg-slate-800 rounded-lg p-3 sm:p-4 mb-4 shadow-xl">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
+            <div className="sm:col-span-2 lg:col-span-2">
               <label className="block text-slate-300 text-xs mb-1">Search</label>
               <div className="flex items-center gap-2">
                 <input
@@ -377,12 +377,13 @@ function Lobby({ token, user, onGameSelect }: { token: string; user: User; onGam
                   placeholder="Code or Player"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="w-full p-3 bg-slate-700 text-white rounded border border-slate-600 focus:border-emerald-500 outline-none"
+                  className="w-full min-w-0 p-3 text-base bg-slate-700 text-white rounded border border-slate-600 focus:border-emerald-500 outline-none"
                 />
                 <button
                   onClick={() => resetSearch()}
-                  className="px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded text-slate-200"
+                  className="shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center bg-slate-700 hover:bg-slate-600 rounded text-slate-200 touch-manipulation"
                   title="Clear"
+                  type="button"
                 >
                   <X size={16} />
                 </button>
@@ -394,7 +395,7 @@ function Lobby({ token, user, onGameSelect }: { token: string; user: User; onGam
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value as any)}
-                className="w-full p-3 bg-slate-700 text-white rounded border border-slate-600 focus:border-emerald-500 outline-none"
+                className="w-full p-3 text-base bg-slate-700 text-white rounded border border-slate-600 focus:border-emerald-500 outline-none"
               >
                 <option value="all">All</option>
                 <option value="waiting">Waiting</option>
@@ -408,7 +409,7 @@ function Lobby({ token, user, onGameSelect }: { token: string; user: User; onGam
               <select
                 value={myColorFilter}
                 onChange={(e) => setMyColorFilter(e.target.value as any)}
-                className="w-full p-3 bg-slate-700 text-white rounded border border-slate-600 focus:border-emerald-500 outline-none"
+                className="w-full p-3 text-base bg-slate-700 text-white rounded border border-slate-600 focus:border-emerald-500 outline-none"
               >
                 <option value="all">All</option>
                 <option value="w">White</option>
@@ -432,27 +433,27 @@ function Lobby({ token, user, onGameSelect }: { token: string; user: User; onGam
         </div>
 
         {/* Quick Actions */}
-        <div className="bg-slate-800 rounded-lg p-6 mb-6 shadow-xl">
+        <div className="bg-slate-800 rounded-lg p-4 sm:p-6 mb-6 shadow-xl">
           <h2 className="text-xl font-semibold text-white mb-4">Quick Actions</h2>
-          <div className="flex flex-col md:flex-row gap-4">
+          <div className="flex flex-col sm:flex-row gap-4">
             <button
               onClick={createGame}
               disabled={creating}
-              className="flex-1 bg-cyan-600 hover:bg-cyan-700 disabled:bg-cyan-800 text-white font-semibold py-3 rounded transition"
+              className="flex-1 min-h-[48px] bg-cyan-600 hover:bg-cyan-700 disabled:bg-cyan-800 text-white font-semibold py-3 rounded transition touch-manipulation"
             >
               {creating ? 'Creating...' : 'Create New Game'}
             </button>
-            <div className="flex gap-2 flex-1">
+            <div className="flex gap-2 flex-1 min-w-0">
               <input
                 type="text"
                 placeholder="Game Code"
                 value={joinCode}
                 onChange={(e) => setJoinCode(e.target.value)}
-                className="flex-1 p-3 bg-slate-700 text-white rounded border border-slate-600 focus:border-emerald-500 outline-none"
+                className="flex-1 min-w-0 p-3 bg-slate-700 text-white rounded border border-slate-600 focus:border-emerald-500 outline-none text-base"
               />
               <button
                 onClick={joinByCode}
-                className="px-6 bg-green-600 hover:bg-green-700 text-white font-semibold rounded transition"
+                className="shrink-0 px-4 sm:px-6 min-h-[48px] min-w-[4.5rem] bg-green-600 hover:bg-green-700 text-white font-semibold rounded transition touch-manipulation"
               >
                 Join
               </button>
@@ -461,7 +462,7 @@ function Lobby({ token, user, onGameSelect }: { token: string; user: User; onGam
         </div>
 
         {/* Cards */}
-        <div className="bg-slate-800 rounded-lg p-6 shadow-xl">
+        <div className="bg-slate-800 rounded-lg p-4 sm:p-6 shadow-xl">
           <h2 className="text-xl font-semibold text-white mb-4">Available Games</h2>
 
           {filtered.map(g => {
@@ -529,7 +530,7 @@ function Lobby({ token, user, onGameSelect }: { token: string; user: User; onGam
                     </p>
                   )}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 shrink-0">
                   <button
                     onClick={() => {
                       if (!iAmIn && isFull) {
@@ -538,7 +539,7 @@ function Lobby({ token, user, onGameSelect }: { token: string; user: User; onGam
                         onGameSelect(g.id);
                       }
                     }}
-                    className={`px-4 py-2 text-white rounded transition ${buttonClass}`}
+                    className={`min-h-[44px] px-4 py-2 text-white rounded transition touch-manipulation ${buttonClass}`}
                   >
                     {actionLabel}
                   </button>
@@ -823,24 +824,36 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
 
   if (!game) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-emerald-900 to-slate-900 flex items-center justify-center">
-        <p className="text-white text-2xl">Loading...</p>
+      <div className="min-h-screen min-h-[100dvh] bg-gradient-to-br from-slate-900 via-emerald-900 to-slate-900 flex items-center justify-center px-4">
+        <p className="text-white text-xl sm:text-2xl">Loading...</p>
       </div>
     );
   }
 
+  const showResign = game.status === 'active' && myColor && !isSpectating;
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-emerald-900 to-slate-900 p-8">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex justify-between items-center mb-6">
-          <button
-            onClick={onBack}
-            className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded"
-          >
-            ← Back to Lobby
-          </button>
-          <div className="bg-slate-800 rounded-lg px-6 py-3 text-center">
-            <h2 className="text-2xl font-bold text-white">Game {game.code}</h2>
+    <div className="min-h-screen min-h-[100dvh] bg-gradient-to-br from-slate-900 via-emerald-900 to-slate-900 px-3 py-4 sm:p-8 pb-[max(6rem,env(safe-area-inset-bottom,0px)+5rem)]">
+      <div className="max-w-6xl mx-auto w-full min-w-0">
+        <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center mb-6">
+          <div className="flex items-center justify-between gap-2 sm:contents">
+            <button
+              onClick={onBack}
+              className="px-4 py-2.5 min-h-[44px] bg-slate-700 hover:bg-slate-600 text-white rounded touch-manipulation shrink-0"
+            >
+              ← Back to Lobby
+            </button>
+            {showResign && (
+              <button
+                onClick={resign}
+                className="sm:hidden px-4 py-2.5 min-h-[44px] bg-red-600 hover:bg-red-700 text-white rounded touch-manipulation shrink-0"
+              >
+                Resign
+              </button>
+            )}
+          </div>
+          <div className="bg-slate-800 rounded-lg px-4 sm:px-6 py-3 text-center w-full sm:w-auto sm:flex-1 sm:max-w-md sm:mx-auto">
+            <h2 className="text-lg sm:text-2xl font-bold text-white break-all">Game {game.code}</h2>
             {(() => {
               const finished = !!game.outcome;
               const waiting = game.status === 'waiting' || game.participants.length < 2;
@@ -848,11 +861,11 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
               return <p className={`text-sm ${statusClass}`}>Status: {game.status}</p>;
             })()}
           </div>
-          <div className="w-[88px]">
-            {game.status === 'active' && myColor && !isSpectating && (
+          <div className="hidden sm:flex w-[88px] justify-end shrink-0">
+            {showResign && (
               <button
                 onClick={resign}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded"
+                className="px-4 py-2.5 min-h-[44px] bg-red-600 hover:bg-red-700 text-white rounded touch-manipulation"
               >
                 Resign
               </button>
@@ -860,16 +873,16 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
           <div className="lg:col-span-2">
             {game.status === 'waiting' && !myColor && !isSpectating && (
-              <div className="bg-slate-800 rounded-lg p-6 mb-4">
-                <h3 className="text-white text-xl font-semibold mb-4">Choose Your Color</h3>
-                <div className="flex gap-4">
+              <div className="bg-slate-800 rounded-lg p-4 sm:p-6 mb-4">
+                <h3 className="text-white text-lg sm:text-xl font-semibold mb-4">Choose Your Color</h3>
+                <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
                   {!game.participants.some((p: { color: string }) => p.color === 'w') && (
                     <button
                       onClick={() => joinGame('w')}
-                      className="flex-1 bg-white hover:bg-gray-200 text-black font-semibold py-3 rounded transition"
+                      className="flex-1 min-h-[48px] bg-white hover:bg-gray-200 text-black font-semibold py-3 rounded transition touch-manipulation"
                     >
                       Play as White
                     </button>
@@ -883,7 +896,7 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
                   {!game.participants.some((p: { color: string }) => p.color === 'b') && (
                     <button
                       onClick={() => joinGame('b')}
-                      className="flex-1 bg-slate-900 hover:bg-black text-white font-semibold py-3 rounded transition"
+                      className="flex-1 min-h-[48px] bg-slate-900 hover:bg-black text-white font-semibold py-3 rounded transition touch-manipulation"
                     >
                       Play as Black
                     </button>
@@ -892,9 +905,9 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
               </div>
             )}
 
-            <div className="bg-slate-800 rounded-lg p-6 inline-block">
-              <div className="relative">
-                <div className={`grid grid-cols-8 gap-0 border-4 border-slate-600 ${isFlipped ? 'rotate-180' : ''}`}>
+            <div className="bg-slate-800 rounded-lg p-3 sm:p-6 w-full max-w-full min-w-0 overflow-hidden">
+              <div className="relative w-full max-w-[min(100%,32rem)] mx-auto aspect-square">
+                <div className={`absolute inset-0 grid grid-cols-8 grid-rows-8 gap-0 border-4 border-slate-600 ${isFlipped ? 'rotate-180' : ''}`}>
                   {board.map((piece, i) => {
                     const square = indexToAlgebraic(i);
                     const r = Math.floor(i / 8);
@@ -909,9 +922,9 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
                       <div
                         key={i}
                         onClick={() => handleSquareClick(i)}
-                        className={`w-16 h-16 flex items-center justify-center cursor-pointer relative
+                        className={`min-w-0 min-h-0 flex items-center justify-center cursor-pointer relative touch-manipulation select-none
               ${isLight ? 'bg-amber-100' : 'bg-amber-800'}
-              ${isSelected ? 'ring-4 ring-yellow-400' : ''}
+              ${isSelected ? 'ring-2 sm:ring-4 ring-yellow-400 ring-inset' : ''}
               ${isCheck ? 'bg-red-500' : ''}
               hover:opacity-80 transition`}
                       >
@@ -919,12 +932,13 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
                           <img
                             src={getPieceImage(piece)}
                             alt={`${piece.color} ${piece.type}`}
-                            className={`w-12 h-12 ${isFlipped ? 'rotate-180' : ''}`}
+                            className={`w-[75%] h-[75%] max-w-[3rem] max-h-[3rem] object-contain ${isFlipped ? 'rotate-180' : ''}`}
+                            draggable={false}
                           />
                         )}
                         {isLegalMove && (
                           <div
-                            className={`absolute w-4 h-4 rounded-full ${isFlipped ? 'rotate-180' : ''} ${piece ? 'border-4 border-green-500' : 'bg-green-500 opacity-50'}`}
+                            className={`absolute w-[22%] h-[22%] max-w-4 max-h-4 rounded-full ${isFlipped ? 'rotate-180' : ''} ${piece ? 'border-4 border-green-500' : 'bg-green-500 opacity-50'}`}
                           />
                         )}
                       </div>
@@ -948,9 +962,9 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
 
                   return (
                     <svg
-                      className={`absolute inset-0 pointer-events-none ${isFlipped ? 'rotate-180' : ''}`}
-                      viewBox="0 0 520 520"
-                      style={{ width: '100%', height: '100%' }}
+                      className={`absolute inset-0 w-full h-full pointer-events-none ${isFlipped ? 'rotate-180' : ''}`}
+                      viewBox="0 0 512 512"
+                      preserveAspectRatio="none"
                     >
                       <defs>
                         <marker
@@ -984,20 +998,22 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
             </div>
 
             {promoting && (
-              <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
-                <div className="bg-slate-800 rounded-lg p-8">
-                  <h3 className="text-white text-2xl font-bold mb-6 text-center">Promote Pawn</h3>
-                  <div className="flex gap-4">
+              <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4 pb-[env(safe-area-inset-bottom,0px)]">
+                <div className="bg-slate-800 rounded-lg p-4 sm:p-8 w-full max-w-sm">
+                  <h3 className="text-white text-xl sm:text-2xl font-bold mb-4 sm:mb-6 text-center">Promote Pawn</h3>
+                  <div className="flex flex-wrap justify-center gap-3 sm:gap-4">
                     {(['q', 'r', 'b', 'n'] as Piece['type'][]).map(type => (
                       <button
                         key={type}
                         onClick={() => handlePromotion(type)}
-                        className="bg-slate-700 hover:bg-slate-600 p-4 rounded transition"
+                        className="bg-slate-700 hover:bg-slate-600 p-3 sm:p-4 rounded transition touch-manipulation min-w-[4.5rem] min-h-[4.5rem] flex items-center justify-center"
+                        type="button"
                       >
                         <img
                           src={getPieceImage({ color: myColor!, type })}
                           alt={type}
-                          className={`w-16 h-16 ${isFlipped ? 'rotate-180' : ''}`}
+                          className={`w-12 h-12 sm:w-16 sm:h-16 ${isFlipped ? 'rotate-180' : ''}`}
+                          draggable={false}
                         />
                       </button>
                     ))}
@@ -1007,9 +1023,9 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
             )}
           </div>
 
-          <div className="space-y-4">
-            <div className="bg-slate-800 rounded-lg p-6">
-              <h3 className="text-white text-xl font-semibold mb-4">Game Info</h3>
+          <div className="space-y-4 min-w-0">
+            <div className="bg-slate-800 rounded-lg p-4 sm:p-6">
+              <h3 className="text-white text-lg sm:text-xl font-semibold mb-4">Game Info</h3>
               <div className="space-y-2 text-slate-300">
                 <p>
                   <strong>Turn:</strong>{' '}
@@ -1037,12 +1053,12 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
               </div>
             </div>
 
-            <div className="bg-slate-800 rounded-lg p-6">
-              <h3 className="text-white text-xl font-semibold mb-4">Players</h3>
+            <div className="bg-slate-800 rounded-lg p-4 sm:p-6">
+              <h3 className="text-white text-lg sm:text-xl font-semibold mb-4">Players</h3>
               <div className="space-y-2">
                 {game.participants.map((p) => (
-                  <div key={p.color} className="flex items-center justify-between text-slate-300">
-                    <span className="font-semibold">{p.displayName}</span>
+                  <div key={p.color} className="flex items-center justify-between gap-2 text-slate-300 min-w-0">
+                    <span className="font-semibold truncate">{p.displayName}</span>
                     <span className={`px-3 py-1 rounded ${p.color === 'w' ? 'bg-white text-black' : 'bg-slate-900 text-white'}`}>
                       {p.color === 'w' ? 'White' : 'Black'}
                     </span>
@@ -1054,9 +1070,9 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
               </div>
             </div>
 
-            <div className="bg-slate-800 rounded-lg p-6">
-              <h3 className="text-white text-xl font-semibold mb-4">Move History</h3>
-              <div className="max-h-64 overflow-y-auto space-y-1 text-slate-300">
+            <div className="bg-slate-800 rounded-lg p-4 sm:p-6">
+              <h3 className="text-white text-lg sm:text-xl font-semibold mb-4">Move History</h3>
+              <div className="max-h-48 sm:max-h-64 overflow-y-auto space-y-1 text-slate-300 text-sm sm:text-base overscroll-contain">
                 {game.history.length === 0 ? (
                   <p className="text-slate-400 italic">No moves yet</p>
                 ) : (
