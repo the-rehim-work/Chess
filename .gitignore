@@ -24,9 +24,9 @@ dist-ssr
 *.sw?
 
 # .NET
-**/bin/
-**/obj/
-**/.vs/
+**/ChessServer/bin/
+**/ChessServer/obj/
+**/ChessServer/.vs/
 *.user
 
 # Environment files (mode files .env.development / .env.production are tracked)
