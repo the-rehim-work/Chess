@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #pragma warning disable CA1814 // Prefer jagged arrays over multidimensional
 
-namespace ChessServer.Migrations
+namespace backend.Migrations
 {
     /// <inheritdoc />
     public partial class Chat : Migration

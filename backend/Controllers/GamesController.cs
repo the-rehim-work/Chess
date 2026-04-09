@@ -1,11 +1,11 @@
-﻿using ChessServer.Data;
+﻿using backend.Data;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 
-namespace ChessServer.Controllers
+namespace backend.Controllers
 {
     [ApiController]
     [Route("api")]

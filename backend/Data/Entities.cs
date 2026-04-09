@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
-namespace ChessServer.Data
+namespace backend.Data
 {
     public sealed class ApplicationUser : IdentityUser<Guid>
     {

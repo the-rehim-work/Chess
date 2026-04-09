@@ -1,7 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 
-namespace ChessServer.Data
+namespace backend.Data
 {
     public sealed class AppDbFactory : IDesignTimeDbContextFactory<AppDb>
     {

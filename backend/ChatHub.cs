@@ -1,10 +1,10 @@
-using ChessServer.Data;
+using backend.Data;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 
-namespace ChessServer
+namespace backend
 {
     [Authorize]
     public sealed class ChatHub : Hub

@@ -1,6 +1,6 @@
 ﻿using Microsoft.AspNetCore.SignalR;
 
-namespace ChessServer
+namespace backend
 {
     public sealed class GameHub : Hub
     {

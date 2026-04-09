@@ -1,10 +1,10 @@
-using ChessServer.Data;
+using backend.Data;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 
-namespace ChessServer.Controllers
+namespace backend.Controllers
 {
     [ApiController]
     [Route("api/chat")]

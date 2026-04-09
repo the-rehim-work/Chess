@@ -1,10 +1,12 @@
 using System.Text;
-using ChessServer;
-using ChessServer.Data;
+using backend;
+using backend.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi;
+using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -82,29 +84,37 @@ builder.Services.AddControllers().AddJsonOptions(o =>
     o.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles);
 
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(c =>
+builder.Services.AddOpenApi(options =>
 {
-    c.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+    options.AddDocumentTransformer((doc, ctx, ct) =>
     {
-        Description = "JWT Authorization header using the Bearer scheme. Example: \"Authorization: Bearer {token}\"",
-        Name = "Authorization",
-        In = Microsoft.OpenApi.Models.ParameterLocation.Header,
-        Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
-        Scheme = "Bearer"
-    });
-    c.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
-    {
+        doc.Components ??= new();
+        doc.Components.SecuritySchemes["Bearer"] = new()
         {
-            new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+            Type = SecuritySchemeType.Http,
+            Scheme = "bearer",
+            BearerFormat = "JWT",
+            In = ParameterLocation.Header,
+            Description = "JWT Authorization header. Example: \"Bearer {token}\""
+        };
+
+        var bearerRef = new OpenApiSecurityScheme
+        {
+            Reference = new OpenApiReference
             {
-                Reference = new Microsoft.OpenApi.Models.OpenApiReference
+                Type = ReferenceType.SecurityScheme,
+                Id = "Bearer"
+            }
+        };
+
+        foreach (var path in doc.Paths.Values)
+            foreach (var op in path.Operations.Values)
+                op.Security.Add(new OpenApiSecurityRequirement
                 {
-                    Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
-                    Id = "Bearer"
-                }
-            },
-            Array.Empty<string>()
-        }
+                    [bearerRef] = Array.Empty<string>()
+                });
+
+        return Task.CompletedTask;
     });
 });
 
@@ -113,7 +123,7 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-    var db = scope.ServiceProvider.GetRequiredService<ChessServer.Data.AppDb>();
+    var db = scope.ServiceProvider.GetRequiredService<backend.Data.AppDb>();
 
     try
     {
@@ -128,12 +138,12 @@ using (var scope = app.Services.CreateScope())
     }
 
     // Minimal seed (roles/admin). Keep it lightweight; heavy seeding belongs in migrations.
-    var roleMgr = scope.ServiceProvider.GetRequiredService<RoleManager<ChessServer.Data.ApplicationRole>>();
-    var userMgr = scope.ServiceProvider.GetRequiredService<UserManager<ChessServer.Data.ApplicationUser>>();
+    var roleMgr = scope.ServiceProvider.GetRequiredService<RoleManager<backend.Data.ApplicationRole>>();
+    var userMgr = scope.ServiceProvider.GetRequiredService<UserManager<backend.Data.ApplicationUser>>();
 
     foreach (var role in new[] { "Admin", "Player" })
         if (!await roleMgr.RoleExistsAsync(role))
-            await roleMgr.CreateAsync(new ChessServer.Data.ApplicationRole { Name = role });
+            await roleMgr.CreateAsync(new backend.Data.ApplicationRole { Name = role });
 
     var adminUserName = builder.Configuration["Seed:Admin:UserName"] ?? "admin";
     var adminEmail    = builder.Configuration["Seed:Admin:Email"]    ?? "admin@chess.local";
@@ -142,7 +152,7 @@ using (var scope = app.Services.CreateScope())
     var admin = await userMgr.FindByNameAsync(adminUserName);
     if (admin is null)
     {
-        admin = new ChessServer.Data.ApplicationUser
+        admin = new backend.Data.ApplicationUser
         {
             UserName = adminUserName,
             Email = adminEmail,
@@ -155,8 +165,8 @@ using (var scope = app.Services.CreateScope())
 
 if (app.Environment.IsDevelopment())
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
+    app.MapOpenApi();
+    app.MapScalarApiReference();
 }
 
 app.UseCors();
