@@ -42,6 +42,8 @@ pnpm-debug.log*
 # Environment files
 .env.local
 .env.*.local
+appsettings.*.Development.json
+appsettings.*.Production.json
 
 # IDE/editor files
 .vscode/
