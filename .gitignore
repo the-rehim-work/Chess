@@ -29,6 +29,9 @@ dist-ssr
 **/ChessServer/.vs/
 *.user
 
+**/ChessServer/appsettings.Production.json
+**/ChessServer/appsettings.Development.json
+
 # Environment files (mode files .env.development / .env.production are tracked)
 .env
 *.env.development
