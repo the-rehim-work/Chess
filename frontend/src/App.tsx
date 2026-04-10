@@ -869,6 +869,7 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
   };
 
   const lastAppliedRef = useRef<number>(0);
+  const botThinkingRef = useRef(false);
 
   const isFlipped = myColor === 'b';
 
@@ -904,7 +905,8 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
       headers: { Authorization: `Bearer ${token}` }
     });
     if (!res.ok) return;
-    const g = normalizeGame(await res.json());
+    const raw = await res.json();
+    const g = normalizeGame(raw);
     setGame(g);
 
     if (g.history && g.history.length > 0) {
@@ -914,9 +916,29 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
       setLastMove(null);
     }
 
-    chess.load(g.fen);
-    setBoard(chessBoardToArray(chess));
+    chess.reset();
 
+    const historyWithFen = (raw.history ?? raw.History ?? [])
+      .sort((a: any, b: any) => a.index - b.index);
+
+    let replayOk = true;
+    for (const h of historyWithFen) {
+      if (!replayOk) break;
+      const fromSq = indexToAlgebraic(h.from);
+      const toSq = indexToAlgebraic(h.to);
+      const moveObj: any = { from: fromSq, to: toSq };
+      if (h.promotion) moveObj.promotion = h.promotion;
+      try {
+        const result = chess.move(moveObj);
+        if (!result) { replayOk = false; }
+      } catch { replayOk = false; }
+    }
+
+    if (!replayOk) {
+      chess.load(g.fen);
+    }
+
+    setBoard(chessBoardToArray(chess));
     lastAppliedRef.current = g.history?.length ?? 0;
   };
 
@@ -951,14 +973,42 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
           headers: { Authorization: `Bearer ${token}` }
         });
         if (!res.ok) return;
-        const g = normalizeGame(await res.json());
+        const raw = await res.json();
+        const g = normalizeGame(raw);
         if (!alive) return;
 
         const currentLen = lastAppliedRef.current;
         const newLen = g.history?.length ?? 0;
 
         if (newLen !== currentLen || !board.length) {
-          chess.load(g.fen);
+          if (newLen > currentLen && currentLen > 0) {
+            const sorted = (raw.history ?? raw.History ?? []).sort((a: any, b: any) => a.index - b.index);
+            const newMoves = sorted.slice(currentLen);
+            let ok = true;
+            for (const h of newMoves) {
+              const moveObj: any = { from: indexToAlgebraic(h.from), to: indexToAlgebraic(h.to) };
+              if (h.promotion) moveObj.promotion = h.promotion;
+              try { if (!chess.move(moveObj)) ok = false; } catch { ok = false; }
+              if (!ok) break;
+            }
+            if (!ok) {
+              chess.reset();
+              const all = sorted;
+              for (const h of all) {
+                const moveObj: any = { from: indexToAlgebraic(h.from), to: indexToAlgebraic(h.to) };
+                if (h.promotion) moveObj.promotion = h.promotion;
+                try { chess.move(moveObj); } catch { chess.load(g.fen); break; }
+              }
+            }
+          } else {
+            chess.reset();
+            const sorted = (raw.history ?? raw.History ?? []).sort((a: any, b: any) => a.index - b.index);
+            for (const h of sorted) {
+              const moveObj: any = { from: indexToAlgebraic(h.from), to: indexToAlgebraic(h.to) };
+              if (h.promotion) moveObj.promotion = h.promotion;
+              try { chess.move(moveObj); } catch { chess.load(g.fen); break; }
+            }
+          }
           startTransition(() => {
             setBoard(chessBoardToArray(chess));
           });
@@ -966,7 +1016,7 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
         }
 
         setGame(g);
-      } catch { /* network hiccup ignored */ }
+      } catch {}
     };
 
     const i = setInterval(tick, 1200);
@@ -1025,22 +1075,25 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
       if (!result) throw new Error('Invalid move');
 
       const newFen = chess.fen();
-      const isCheckmate = chess.isCheckmate();
-      const isDraw = chess.isDraw();
-      const isStalemate = chess.isStalemate();
 
-      let outcome = null;
-      let reason = null;
+      let outcome: string | null = null;
+      let reason: string | null = null;
 
-      if (isCheckmate) {
+      if (chess.isCheckmate()) {
         outcome = 'checkmate';
         reason = chess.turn() === 'w' ? 'Black wins' : 'White wins';
-      } else if (isStalemate) {
+      } else if (chess.isStalemate()) {
         outcome = 'draw';
-        reason = 'stalemate';
-      } else if (isDraw) {
+        reason = 'Stalemate';
+      } else if (chess.isThreefoldRepetition()) {
         outcome = 'draw';
-        reason = 'draw';
+        reason = 'Threefold repetition';
+      } else if (chess.isDrawByFiftyMoves()) {
+        outcome = 'draw';
+        reason = '50-move rule';
+      } else if (chess.isInsufficientMaterial()) {
+        outcome = 'draw';
+        reason = 'Insufficient material';
       }
 
       startTransition(() => {
@@ -1078,19 +1131,108 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
     }
   };
 
-  const evaluateBoard = (c: Chess) => {
-    const vals: Record<string, number> = { p: 1, n: 3, b: 3.25, r: 5, q: 9, k: 0 };
+  const PST_PAWN = [
+     0,  0,  0,  0,  0,  0,  0,  0,
+    50, 50, 50, 50, 50, 50, 50, 50,
+    10, 10, 20, 30, 30, 20, 10, 10,
+     5,  5, 10, 25, 25, 10,  5,  5,
+     0,  0,  0, 20, 20,  0,  0,  0,
+     5, -5,-10,  0,  0,-10, -5,  5,
+     5, 10, 10,-20,-20, 10, 10,  5,
+     0,  0,  0,  0,  0,  0,  0,  0
+  ];
+  const PST_KNIGHT = [
+    -50,-40,-30,-30,-30,-30,-40,-50,
+    -40,-20,  0,  0,  0,  0,-20,-40,
+    -30,  0, 10, 15, 15, 10,  0,-30,
+    -30,  5, 15, 20, 20, 15,  5,-30,
+    -30,  0, 15, 20, 20, 15,  0,-30,
+    -30,  5, 10, 15, 15, 10,  5,-30,
+    -40,-20,  0,  5,  5,  0,-20,-40,
+    -50,-40,-30,-30,-30,-30,-40,-50
+  ];
+  const PST_BISHOP = [
+    -20,-10,-10,-10,-10,-10,-10,-20,
+    -10,  0,  0,  0,  0,  0,  0,-10,
+    -10,  0, 10, 10, 10, 10,  0,-10,
+    -10,  5,  5, 10, 10,  5,  5,-10,
+    -10,  0,  5, 10, 10,  5,  0,-10,
+    -10, 10, 10, 10, 10, 10, 10,-10,
+    -10,  5,  0,  0,  0,  0,  5,-10,
+    -20,-10,-10,-10,-10,-10,-10,-20
+  ];
+  const PST_ROOK = [
+     0,  0,  0,  0,  0,  0,  0,  0,
+     5, 10, 10, 10, 10, 10, 10,  5,
+    -5,  0,  0,  0,  0,  0,  0, -5,
+    -5,  0,  0,  0,  0,  0,  0, -5,
+    -5,  0,  0,  0,  0,  0,  0, -5,
+    -5,  0,  0,  0,  0,  0,  0, -5,
+    -5,  0,  0,  0,  0,  0,  0, -5,
+     0,  0,  0,  5,  5,  0,  0,  0
+  ];
+  const PST_QUEEN = [
+    -20,-10,-10, -5, -5,-10,-10,-20,
+    -10,  0,  0,  0,  0,  0,  0,-10,
+    -10,  0,  5,  5,  5,  5,  0,-10,
+     -5,  0,  5,  5,  5,  5,  0, -5,
+      0,  0,  5,  5,  5,  5,  0, -5,
+    -10,  5,  5,  5,  5,  5,  0,-10,
+    -10,  0,  5,  0,  0,  0,  0,-10,
+    -20,-10,-10, -5, -5,-10,-10,-20
+  ];
+  const PST_KING_MID = [
+    -30,-40,-40,-50,-50,-40,-40,-30,
+    -30,-40,-40,-50,-50,-40,-40,-30,
+    -30,-40,-40,-50,-50,-40,-40,-30,
+    -30,-40,-40,-50,-50,-40,-40,-30,
+    -20,-30,-30,-40,-40,-30,-30,-20,
+    -10,-20,-20,-20,-20,-20,-20,-10,
+     20, 20,  0,  0,  0,  0, 20, 20,
+     20, 30, 10,  0,  0, 10, 30, 20
+  ];
+
+  const PST_MAP: Record<string, number[]> = {
+    p: PST_PAWN, n: PST_KNIGHT, b: PST_BISHOP,
+    r: PST_ROOK, q: PST_QUEEN, k: PST_KING_MID
+  };
+  const PIECE_VAL: Record<string, number> = { p: 100, n: 320, b: 330, r: 500, q: 900, k: 0 };
+
+  const evaluateBoard = (c: Chess): number => {
     let score = 0;
-    const board = c.board();
-    for (const row of board) for (const sq of row) if (sq) score += sq.color === 'w' ? vals[sq.type] : -vals[sq.type];
-    score += c.moves().length * (c.turn() === 'w' ? 0.1 : -0.1);
+    const b = c.board();
+    for (let row = 0; row < 8; row++) {
+      for (let col = 0; col < 8; col++) {
+        const sq = b[row][col];
+        if (!sq) continue;
+        const idx = row * 8 + col;
+        const mirrorIdx = (7 - row) * 8 + col;
+        const pst = PST_MAP[sq.type];
+        if (sq.color === 'w') {
+          score += PIECE_VAL[sq.type] + (pst ? pst[mirrorIdx] : 0);
+        } else {
+          score -= PIECE_VAL[sq.type] + (pst ? pst[idx] : 0);
+        }
+      }
+    }
+    if (c.isCheckmate()) {
+      score = c.turn() === 'w' ? -99999 : 99999;
+    }
     return score;
   };
 
-  const minimax = (c: Chess, depth: number, alpha: number, beta: number, maximizingWhite: boolean): number => {
+  const minimax = (c: Chess, depth: number, alpha: number, beta: number, maximizing: boolean): number => {
     if (depth === 0 || c.isGameOver()) return evaluateBoard(c);
     const moves = c.moves({ verbose: true }) as ChessMove[];
-    if (maximizingWhite) {
+    moves.sort((a, b) => {
+      let sa = 0, sb = 0;
+      if (a.captured) sa += 10;
+      if (b.captured) sb += 10;
+      if (a.flags.includes('p')) sa += 5;
+      if (b.flags.includes('p')) sb += 5;
+      return sb - sa;
+    });
+    if (maximizing) {
       let val = -Infinity;
       for (const m of moves) {
         c.move(m);
@@ -1117,19 +1259,27 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
     if (!moves.length) return null;
     const turn = c.turn();
     const randomMove = () => moves[Math.floor(Math.random() * moves.length)];
+
     if (difficulty === 'easy') {
+      if (Math.random() < 0.7) return randomMove();
       const captures = moves.filter(m => !!m.captured);
-      if (captures.length && Math.random() < 0.3) return captures[Math.floor(Math.random() * captures.length)];
+      if (captures.length && Math.random() < 0.5) return captures[Math.floor(Math.random() * captures.length)];
       return randomMove();
     }
-    if (difficulty === 'medium' && Math.random() < 0.2) return randomMove();
-    if (difficulty === 'hard' && Math.random() < 0.05) return randomMove();
-    const depth = difficulty === 'expert' ? 3 : difficulty === 'hard' ? 2 : 1;
+
+    let blunderChance = 0;
+    let depth = 1;
+    if (difficulty === 'medium') { blunderChance = 0.25; depth = 2; }
+    else if (difficulty === 'hard') { blunderChance = 0.05; depth = 3; }
+    else if (difficulty === 'expert') { blunderChance = 0; depth = 4; }
+
+    if (Math.random() < blunderChance) return randomMove();
+
     let best: ChessMove | null = null;
     let bestScore = turn === 'w' ? -Infinity : Infinity;
     for (const m of moves) {
       c.move(m);
-      const score = minimax(c, depth - 1, -Infinity, Infinity, c.turn() === 'w');
+      const score = minimax(c, depth - 1, -Infinity, Infinity, turn !== 'w');
       c.undo();
       if (turn === 'w') {
         if (score > bestScore) { bestScore = score; best = m; }
@@ -1141,45 +1291,51 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
   };
 
   const maybeDoBotMove = async () => {
+    if (botThinkingRef.current) return;
     if (!game || game.status !== 'active') return;
     const bot = game.participants.find(p => p.isBot);
     if (!bot) return;
     if (chess.turn() !== bot.color) return;
-    await new Promise(r => setTimeout(r, 500 + Math.floor(Math.random() * 1000)));
-    const difficulty = (game.botDifficulty || 'easy').toLowerCase();
-    const botMove = pickBotMove(difficulty, chess);
-    if (!botMove) return;
-    const after = new Chess(chess.fen());
-    after.move({ from: botMove.from, to: botMove.to, promotion: botMove.promotion });
-    const isCheckmate = after.isCheckmate();
-    const isDraw = after.isDraw();
-    const isStalemate = after.isStalemate();
-    let outcome = null;
-    let reason = null;
-    if (isCheckmate) {
-      outcome = 'checkmate';
-      reason = after.turn() === 'w' ? 'Black wins' : 'White wins';
-    } else if (isStalemate) {
-      outcome = 'draw';
-      reason = 'stalemate';
-    } else if (isDraw) {
-      outcome = 'draw';
-      reason = 'draw';
+    botThinkingRef.current = true;
+    try {
+      await new Promise(r => setTimeout(r, 500 + Math.floor(Math.random() * 1000)));
+      const difficulty = (game.botDifficulty || 'easy').toLowerCase();
+      const botMove = pickBotMove(difficulty, chess);
+      if (!botMove) return;
+      const after = new Chess(chess.fen());
+      after.move({ from: botMove.from, to: botMove.to, promotion: botMove.promotion });
+      let outcome: string | null = null;
+      let reason: string | null = null;
+      if (after.isCheckmate()) {
+        outcome = 'checkmate';
+        reason = after.turn() === 'w' ? 'Black wins' : 'White wins';
+      } else if (after.isStalemate()) {
+        outcome = 'draw';
+        reason = 'Stalemate';
+      } else if (after.isDrawByFiftyMoves()) {
+        outcome = 'draw';
+        reason = '50-move rule';
+      } else if (after.isInsufficientMaterial()) {
+        outcome = 'draw';
+        reason = 'Insufficient material';
+      }
+      await fetch(`${API_BASE}/games/${gameId}/bot-move`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from: algebraicToIndex(botMove.from),
+          to: algebraicToIndex(botMove.to),
+          flags: botMove.flags,
+          promotion: botMove.promotion ?? null,
+          fen: after.fen(),
+          outcome,
+          reason
+        })
+      });
+      await loadGameFull();
+    } finally {
+      botThinkingRef.current = false;
     }
-    await fetch(`${API_BASE}/games/${gameId}/bot-move`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        from: algebraicToIndex(botMove.from),
-        to: algebraicToIndex(botMove.to),
-        flags: botMove.flags,
-        promotion: botMove.promotion ?? null,
-        fen: after.fen(),
-        outcome,
-        reason
-      })
-    });
-    await loadGameFull();
   };
 
   const handlePromotion = (type: string) => {
@@ -1272,6 +1428,12 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
                   Join Game
                 </button>
                 <p className="text-xs text-slate-400 mt-2">Color assigned automatically</p>
+              </div>
+            )}
+
+            {isSpectating && game.status === 'active' && (
+              <div className="bg-slate-700 rounded-lg p-3 mb-4 text-center">
+                <p className="text-slate-300 text-sm">Spectator Mode — watching the game</p>
               </div>
             )}
 
