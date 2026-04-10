@@ -17,9 +17,10 @@ namespace backend.Controllers
         private readonly UserManager<ApplicationUser> _users;
         private readonly SignInManager<ApplicationUser> _signIn;
         private readonly IConfiguration _cfg;
+        private readonly AppDb _db;
 
-        public AuthController(UserManager<ApplicationUser> users, SignInManager<ApplicationUser> signIn, IConfiguration cfg)
-        { _users = users; _signIn = signIn; _cfg = cfg; }
+        public AuthController(UserManager<ApplicationUser> users, SignInManager<ApplicationUser> signIn, IConfiguration cfg, AppDb db)
+        { _users = users; _signIn = signIn; _cfg = cfg; _db = db; }
 
         private static readonly Regex UserNameRule = new(@"^[a-zA-Z0-9_.-]{3,32}$", RegexOptions.Compiled);
 
@@ -44,6 +45,8 @@ namespace backend.Controllers
             if (!res.Succeeded) return BadRequest(res.Errors);
 
             await _users.AddToRoleAsync(u, "Player");
+            _db.PlayerRatings.Add(new PlayerRating { UserId = u.Id });
+            await _db.SaveChangesAsync();
             return Ok(new { u.Id, u.UserName, u.Email, u.DisplayName });
         }
 

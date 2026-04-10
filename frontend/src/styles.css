@@ -26,3 +26,7 @@ body {
   scrollbar-width: thin;
   scrollbar-color: #94a3b8 transparent;
 }
+
+.chess-board-container {
+  touch-action: manipulation;
+}

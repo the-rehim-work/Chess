@@ -1,11 +1,11 @@
 using System.Text;
 using backend;
 using backend.Data;
+using backend.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using Microsoft.OpenApi;
 using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -18,7 +18,8 @@ var jwtIssuer = builder.Configuration["Jwt:Issuer"];
 var jwtAudience = builder.Configuration["Jwt:Audience"];
 
 builder.Services.AddDbContext<AppDb>(opt =>
-    opt.UseSqlServer(builder.Configuration.GetConnectionString("Default")));
+    opt.UseSqlServer(builder.Configuration.GetConnectionString("Default"))
+       .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning)));
 
 builder.Services
     .AddIdentityCore<ApplicationUser>(opt =>
@@ -80,43 +81,13 @@ builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
     p.WithOrigins(origins).AllowAnyHeader().AllowAnyMethod().AllowCredentials()));
 
 builder.Services.AddSignalR();
+builder.Services.AddSingleton<EloService>();
+builder.Services.AddSingleton<BotEngine>();
 builder.Services.AddControllers().AddJsonOptions(o =>
     o.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles);
 
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddOpenApi(options =>
-{
-    options.AddDocumentTransformer((doc, ctx, ct) =>
-    {
-        doc.Components ??= new();
-        doc.Components.SecuritySchemes["Bearer"] = new()
-        {
-            Type = SecuritySchemeType.Http,
-            Scheme = "bearer",
-            BearerFormat = "JWT",
-            In = ParameterLocation.Header,
-            Description = "JWT Authorization header. Example: \"Bearer {token}\""
-        };
-
-        var bearerRef = new OpenApiSecurityScheme
-        {
-            Reference = new OpenApiReference
-            {
-                Type = ReferenceType.SecurityScheme,
-                Id = "Bearer"
-            }
-        };
-
-        foreach (var path in doc.Paths.Values)
-            foreach (var op in path.Operations.Values)
-                op.Security.Add(new OpenApiSecurityRequirement
-                {
-                    [bearerRef] = Array.Empty<string>()
-                });
-
-        return Task.CompletedTask;
-    });
-});
+builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
@@ -161,6 +132,66 @@ using (var scope = app.Services.CreateScope())
         var create = await userMgr.CreateAsync(admin, adminPass);
         if (create.Succeeded) await userMgr.AddToRoleAsync(admin, "Admin");
     }
+
+    if (admin is not null)
+    {
+        if (!await userMgr.IsInRoleAsync(admin, "Player"))
+            await userMgr.AddToRoleAsync(admin, "Player");
+        if (!await db.PlayerRatings.AnyAsync(x => x.UserId == admin.Id))
+            db.PlayerRatings.Add(new PlayerRating { UserId = admin.Id });
+    }
+
+    var botSeeds = new[]
+    {
+        new { UserName = "bot_easy", DisplayName = "Easy Bot", Elo = 600 },
+        new { UserName = "bot_medium", DisplayName = "Medium Bot", Elo = 1000 },
+        new { UserName = "bot_hard", DisplayName = "Hard Bot", Elo = 1500 },
+        new { UserName = "bot_expert", DisplayName = "Expert Bot", Elo = 2000 }
+    };
+    foreach (var botSeed in botSeeds)
+    {
+        var bot = await userMgr.FindByNameAsync(botSeed.UserName);
+        if (bot is null)
+        {
+            bot = new ApplicationUser
+            {
+                UserName = botSeed.UserName,
+                DisplayName = botSeed.DisplayName,
+                Email = $"{botSeed.UserName}@chess.local",
+                IsBot = true
+            };
+            var created = await userMgr.CreateAsync(bot, Guid.NewGuid().ToString("N") + "!");
+            if (!created.Succeeded) continue;
+        }
+        if (!bot.IsBot)
+        {
+            bot.IsBot = true;
+            await userMgr.UpdateAsync(bot);
+        }
+        if (!await userMgr.IsInRoleAsync(bot, "Player"))
+            await userMgr.AddToRoleAsync(bot, "Player");
+
+        var botRating = await db.PlayerRatings.FirstOrDefaultAsync(x => x.UserId == bot.Id);
+        if (botRating is null)
+        {
+            db.PlayerRatings.Add(new PlayerRating
+            {
+                UserId = bot.Id,
+                Elo = botSeed.Elo,
+                PeakElo = botSeed.Elo,
+                League = EloService.GetLeague(botSeed.Elo)
+            });
+        }
+        else
+        {
+            botRating.Elo = botSeed.Elo;
+            botRating.PeakElo = botSeed.Elo;
+            botRating.League = EloService.GetLeague(botSeed.Elo);
+            botRating.UpdatedAt = DateTime.UtcNow;
+        }
+    }
+
+    await db.SaveChangesAsync();
 }
 
 if (app.Environment.IsDevelopment())

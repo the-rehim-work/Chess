@@ -1,4 +1,5 @@
 ﻿using backend.Data;
+using backend.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -14,12 +15,14 @@ namespace backend.Controllers
         private readonly AppDb _db;
         private readonly IHubContext<GameHub> _hub;
         private readonly UserManager<ApplicationUser> _users;
+        private readonly EloService _eloService;
 
-        public GamesController(AppDb db, IHubContext<GameHub> hub, UserManager<ApplicationUser> users)
+        public GamesController(AppDb db, IHubContext<GameHub> hub, UserManager<ApplicationUser> users, EloService eloService)
         {
             _db = db;
             _hub = hub;
             _users = users;
+            _eloService = eloService;
         }
 
         // ─────────────────────────────────────────────────────────────────────────
@@ -29,14 +32,15 @@ namespace backend.Controllers
         [Authorize]
         public async Task<IActionResult> CreateGame([FromBody] CreateGameDto? dto)
         {
+            var defaultFen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+            var fen = string.IsNullOrWhiteSpace(dto?.Fen) ? defaultFen : dto!.Fen;
             var code = ShortCode();
             var game = new Game
             {
                 Code = code,
-                Fen = string.IsNullOrWhiteSpace(dto?.Fen)
-                    ? "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
-                    : dto!.Fen,
-                Status = "waiting"
+                Fen = fen,
+                Status = "waiting",
+                IsRanked = string.Equals(fen, defaultFen, StringComparison.Ordinal)
             };
 
             _db.Games.Add(game);
@@ -53,7 +57,7 @@ namespace backend.Controllers
         public async Task<IActionResult> GetGame(Guid id)
         {
             var g = await _db.Games
-                .Include(x => x.Participants).ThenInclude(p => p.User)
+                .Include(x => x.Participants).ThenInclude(p => p.User).ThenInclude(u => u.Rating)
                 .Include(x => x.History)
                 .FirstOrDefaultAsync(x => x.Id == id);
 
@@ -72,8 +76,18 @@ namespace backend.Controllers
                 g.CreatedAt,
                 g.Outcome,
                 g.Reason,
+                g.IsRanked,
+                g.IsBotGame,
+                g.BotDifficulty,
                 Participants = g.Participants
-                    .Select(p => new { p.User.DisplayName, p.Color })
+                    .Select(p => new
+                    {
+                        p.User.DisplayName,
+                        p.Color,
+                        p.User.IsBot,
+                        Elo = p.User.Rating != null ? p.User.Rating.Elo : 1200,
+                        League = p.User.Rating != null ? p.User.Rating.League : "Bronze IV"
+                    })
                     .ToList(),
                 History = g.History
                     .OrderBy(m => m.Index)
@@ -105,7 +119,7 @@ namespace backend.Controllers
         public async Task<IActionResult> Spectate(Guid id)
         {
             var g = await _db.Games
-                .Include(x => x.Participants).ThenInclude(p => p.User)
+                .Include(x => x.Participants).ThenInclude(p => p.User).ThenInclude(u => u.Rating)
                 .Include(x => x.History)
                 .FirstOrDefaultAsync(x => x.Id == id);
 
@@ -120,8 +134,18 @@ namespace backend.Controllers
                 g.CreatedAt,
                 g.Outcome,
                 g.Reason,
+                g.IsRanked,
+                g.IsBotGame,
+                g.BotDifficulty,
                 Participants = g.Participants
-                    .Select(p => new { p.User.DisplayName, p.Color })
+                    .Select(p => new
+                    {
+                        p.User.DisplayName,
+                        p.Color,
+                        p.User.IsBot,
+                        Elo = p.User.Rating != null ? p.User.Rating.Elo : 1200,
+                        League = p.User.Rating != null ? p.User.Rating.League : "Bronze IV"
+                    })
                     .ToList(),
                 History = g.History
                     .OrderBy(m => m.Index)
@@ -168,7 +192,7 @@ namespace backend.Controllers
             var me = await _users.GetUserAsync(User);
 
             IQueryable<Game> query = _db.Games
-                .Include(x => x.Participants).ThenInclude(p => p.User);
+                .Include(x => x.Participants).ThenInclude(p => p.User).ThenInclude(u => u.Rating);
 
             if (status is "waiting" or "active" or "finished")
                 query = query.Where(x => x.Status == status);
@@ -195,10 +219,16 @@ namespace backend.Controllers
                     x.Fen,
                     x.Outcome,
                     x.Reason,
+                    x.IsRanked,
+                    x.IsBotGame,
+                    x.BotDifficulty,
                     Participants = x.Participants.Select(p => new
                     {
                         p.User.DisplayName,
-                        p.Color
+                        p.Color,
+                        p.User.IsBot,
+                        Elo = p.User.Rating != null ? p.User.Rating.Elo : 1200,
+                        League = p.User.Rating != null ? p.User.Rating.League : "Bronze IV"
                     }).ToList(),
                     Perspective = new
                     {
@@ -329,6 +359,10 @@ namespace backend.Controllers
             g.Reason = dto.reason;
             if (!string.IsNullOrEmpty(dto.outcome)) g.Status = "finished";
 
+            object? eloChange = null;
+            if (g.Status == "finished")
+                eloChange = await ApplyRatingsForFinishedGame(g, dto.outcome, dto.reason, null);
+
             await _db.SaveChangesAsync();
 
             await _hub.Clients.Group(g.Id.ToString()).SendAsync("game:update", new
@@ -349,7 +383,8 @@ namespace backend.Controllers
                 fen = g.Fen,
                 outcome = g.Outcome,
                 reason = g.Reason,
-                status = g.Status
+                status = g.Status,
+                eloChange
             });
 
             return Ok(new { fen = g.Fen, g.Outcome, g.Reason });
@@ -379,6 +414,7 @@ namespace backend.Controllers
             g.Outcome = "resign";
             g.Reason = callerColor == "w" ? "Black wins" : "White wins";
             g.Status = "finished";
+            var eloChange = await ApplyRatingsForFinishedGame(g, g.Outcome, g.Reason, callerColor);
 
             await _db.SaveChangesAsync();
 
@@ -389,10 +425,66 @@ namespace backend.Controllers
                 outcome = g.Outcome,
                 reason = g.Reason,
                 resignedColor = callerColor,
-                status = g.Status
+                status = g.Status,
+                eloChange
             });
 
             return Ok(new { g.Outcome, g.Reason, g.Status });
+        }
+
+        [HttpPost("games/{id:guid}/bot-move")]
+        [Authorize]
+        public async Task<IActionResult> PostBotMove(Guid id, [FromBody] MoveDto dto)
+        {
+            var g = await _db.Games
+                .Include(x => x.Participants).ThenInclude(p => p.User)
+                .Include(x => x.History)
+                .FirstOrDefaultAsync(x => x.Id == id);
+            if (g is null) return NotFound();
+            if (g.Status != "active") return BadRequest(new { message = "Game is not active." });
+            var caller = await _users.GetUserAsync(User);
+            if (caller is null) return Unauthorized();
+            if (!g.Participants.Any(p => p.UserId == caller.Id)) return Forbid();
+
+            var botParticipant = g.Participants.FirstOrDefault(p => p.User.IsBot);
+            if (botParticipant is null) return BadRequest(new { message = "Game has no bot participant." });
+            var sideToMove = ActiveColorFromFen(g.Fen);
+            if (!string.Equals(botParticipant.Color, sideToMove, StringComparison.OrdinalIgnoreCase))
+                return BadRequest(new { message = "It's not bot's turn." });
+
+            var nextIdx = g.History.Count;
+            var move = new Move
+            {
+                GameId = g.Id,
+                Index = nextIdx,
+                From = dto.from,
+                To = dto.to,
+                Flags = dto.flags,
+                Promotion = dto.promotion,
+                FenAfter = dto.fen,
+                Outcome = dto.outcome,
+                Reason = dto.reason
+            };
+            _db.Moves.Add(move);
+            g.Fen = dto.fen;
+            g.Outcome = dto.outcome;
+            g.Reason = dto.reason;
+            if (!string.IsNullOrEmpty(dto.outcome)) g.Status = "finished";
+            object? eloChange = null;
+            if (g.Status == "finished")
+                eloChange = await ApplyRatingsForFinishedGame(g, dto.outcome, dto.reason, null);
+            await _db.SaveChangesAsync();
+            await _hub.Clients.Group(g.Id.ToString()).SendAsync("game:update", new
+            {
+                type = "move",
+                gameId = g.Id,
+                fen = g.Fen,
+                outcome = g.Outcome,
+                reason = g.Reason,
+                status = g.Status,
+                eloChange
+            });
+            return Ok(new { fen = g.Fen, g.Outcome, g.Reason });
         }
 
         // ─────────────────────────────────────────────────────────────────────────
@@ -464,6 +556,87 @@ namespace backend.Controllers
             => Convert.ToBase64String(Guid.NewGuid().ToByteArray())
                .Replace("+", "").Replace("/", "").Replace("=", "")
                .Substring(0, 6);
+
+        private async Task<object?> ApplyRatingsForFinishedGame(Game g, string? outcome, string? reason, string? resignedColor)
+        {
+            if (!g.IsRanked) return null;
+            var participants = await _db.GameParticipants
+                .Include(p => p.User)
+                .Where(p => p.GameId == g.Id)
+                .ToListAsync();
+            var white = participants.FirstOrDefault(p => p.Color == "w");
+            var black = participants.FirstOrDefault(p => p.Color == "b");
+            if (white is null || black is null) return null;
+
+            var result = ResolveResult(outcome, reason, resignedColor);
+            if (result is null) return null;
+
+            var whiteRating = await EnsureRating(white.UserId);
+            var blackRating = await EnsureRating(black.UserId);
+            var oldWhite = whiteRating.Elo;
+            var oldBlack = blackRating.Elo;
+            var (newWhite, newBlack) = _eloService.Calculate(oldWhite, oldBlack, result, whiteRating.GamesPlayed, blackRating.GamesPlayed);
+
+            if (white.User.IsBot && !black.User.IsBot)
+                newWhite = oldWhite;
+            if (black.User.IsBot && !white.User.IsBot)
+                newBlack = oldBlack;
+
+            UpdateRatingStats(whiteRating, oldWhite, newWhite, result == "w", result == "draw", white.User.IsBot);
+            UpdateRatingStats(blackRating, oldBlack, newBlack, result == "b", result == "draw", black.User.IsBot);
+
+            return new
+            {
+                white = new { oldElo = oldWhite, newElo = newWhite, league = whiteRating.League },
+                black = new { oldElo = oldBlack, newElo = newBlack, league = blackRating.League }
+            };
+        }
+
+        private async Task<PlayerRating> EnsureRating(Guid userId)
+        {
+            var rating = await _db.PlayerRatings.FirstOrDefaultAsync(x => x.UserId == userId);
+            if (rating != null) return rating;
+            rating = new PlayerRating { UserId = userId, League = EloService.GetLeague(1200) };
+            _db.PlayerRatings.Add(rating);
+            return rating;
+        }
+
+        private static string? ResolveResult(string? outcome, string? reason, string? resignedColor)
+        {
+            if (string.Equals(outcome, "draw", StringComparison.OrdinalIgnoreCase)) return "draw";
+            if (string.Equals(outcome, "resign", StringComparison.OrdinalIgnoreCase))
+                return resignedColor == "w" ? "b" : "w";
+            var normalizedReason = (reason ?? string.Empty).ToLowerInvariant();
+            if (normalizedReason.Contains("white wins")) return "w";
+            if (normalizedReason.Contains("black wins")) return "b";
+            return null;
+        }
+
+        private static void UpdateRatingStats(PlayerRating rating, int oldElo, int newElo, bool win, bool draw, bool isBot)
+        {
+            if (isBot) return;
+            rating.Elo = newElo;
+            rating.GamesPlayed += 1;
+            if (draw)
+            {
+                rating.Draws += 1;
+                rating.WinStreak = 0;
+            }
+            else if (win)
+            {
+                rating.Wins += 1;
+                rating.WinStreak += 1;
+                rating.BestWinStreak = Math.Max(rating.BestWinStreak, rating.WinStreak);
+            }
+            else
+            {
+                rating.Losses += 1;
+                rating.WinStreak = 0;
+            }
+            rating.PeakElo = Math.Max(rating.PeakElo, newElo);
+            rating.League = EloService.GetLeague(newElo);
+            rating.UpdatedAt = DateTime.UtcNow;
+        }
 
         public sealed record CreateGameDto(string? Fen);
         public sealed record MoveDto(int from, int to, string? flags, string? promotion, string fen, string? outcome, string? reason);

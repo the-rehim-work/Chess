@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using backend.Data;
 
@@ -11,9 +12,11 @@ using backend.Data;
 namespace backend.Migrations
 {
     [DbContext(typeof(AppDb))]
-    partial class AppDbModelSnapshot : ModelSnapshot
+    [Migration("20260409075221_RankingMatchmakingBots")]
+    partial class RankingMatchmakingBots
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -141,14 +144,14 @@ namespace backend.Migrations
                         new
                         {
                             Id = new Guid("11111111-1111-1111-1111-111111111111"),
-                            ConcurrencyStamp = "3d005a20-5778-416b-a8ff-7b965b42e071",
+                            ConcurrencyStamp = "3f7f7a31-f50f-4313-9929-7565770e2ca6",
                             Name = "Admin",
                             NormalizedName = "ADMIN"
                         },
                         new
                         {
                             Id = new Guid("22222222-2222-2222-2222-222222222222"),
-                            ConcurrencyStamp = "acebeefb-35c0-419a-9150-aa7539873a27",
+                            ConcurrencyStamp = "05cdc78e-97fa-4c17-b0a1-b8572bbf9d6e",
                             Name = "Player",
                             NormalizedName = "PLAYER"
                         });

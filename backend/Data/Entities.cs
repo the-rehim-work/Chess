@@ -9,8 +9,10 @@ namespace backend.Data
     {
         [MaxLength(128)]
         public string DisplayName { get; set; } = string.Empty;
+        public bool IsBot { get; set; }
 
         public ICollection<GameParticipant> Participations { get; set; } = new List<GameParticipant>();
+        public PlayerRating? Rating { get; set; }
     }
 
     public sealed class ApplicationRole : IdentityRole<Guid> { }
@@ -45,6 +47,10 @@ namespace backend.Data
 
         [MaxLength(16)]
         public string Status { get; set; } = "waiting";
+        public bool IsRanked { get; set; } = true;
+        public bool IsBotGame { get; set; }
+        [MaxLength(16)]
+        public string? BotDifficulty { get; set; }
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
@@ -143,6 +149,35 @@ namespace backend.Data
         public DateTime? ReadAt { get; set; }
     }
 
+    public sealed class PlayerRating
+    {
+        public Guid Id { get; set; } = Guid.NewGuid();
+        public Guid UserId { get; set; }
+        public ApplicationUser User { get; set; } = null!;
+        public int Elo { get; set; } = 1200;
+        public int GamesPlayed { get; set; }
+        public int Wins { get; set; }
+        public int Losses { get; set; }
+        public int Draws { get; set; }
+        public int WinStreak { get; set; }
+        public int BestWinStreak { get; set; }
+        public int PeakElo { get; set; } = 1200;
+        public string League { get; set; } = "Bronze IV";
+        public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+    }
+
+    public sealed class MatchmakingEntry
+    {
+        public Guid Id { get; set; } = Guid.NewGuid();
+        public Guid UserId { get; set; }
+        public ApplicationUser User { get; set; } = null!;
+        public int Elo { get; set; }
+        public DateTime QueuedAt { get; set; } = DateTime.UtcNow;
+        public string? PreferredColor { get; set; }
+        public bool IsBot { get; set; }
+        public string? BotDifficulty { get; set; }
+    }
+
     public sealed class AppDb : IdentityDbContext<ApplicationUser, ApplicationRole, Guid,
         IdentityUserClaim<Guid>, ApplicationUserRole, IdentityUserLogin<Guid>,
         IdentityRoleClaim<Guid>, IdentityUserToken<Guid>>
@@ -156,6 +191,8 @@ namespace backend.Data
         public DbSet<DirectThread> DirectThreads => Set<DirectThread>();
         public DbSet<DirectThreadMember> DirectThreadMembers => Set<DirectThreadMember>();
         public DbSet<DirectMessage> DirectMessages => Set<DirectMessage>();
+        public DbSet<PlayerRating> PlayerRatings => Set<PlayerRating>();
+        public DbSet<MatchmakingEntry> MatchmakingQueue => Set<MatchmakingEntry>();
 
         protected override void OnModelCreating(ModelBuilder b)
         {
@@ -164,6 +201,7 @@ namespace backend.Data
             b.Entity<ApplicationUser>(e =>
             {
                 e.Property(x => x.DisplayName).HasMaxLength(128);
+                e.Property(x => x.IsBot).HasDefaultValue(false);
                 e.Property(x => x.UserName).HasMaxLength(64).IsRequired();
                 e.HasIndex(x => x.UserName).IsUnique();
             });
@@ -189,6 +227,8 @@ namespace backend.Data
                 e.Property(x => x.Castling).HasMaxLength(4);
                 e.Property(x => x.Turn).HasMaxLength(1);
                 e.Property(x => x.Status).HasMaxLength(16);
+                e.Property(x => x.IsRanked).HasDefaultValue(true);
+                e.Property(x => x.BotDifficulty).HasMaxLength(16);
             });
 
             b.Entity<Move>(e =>
@@ -237,6 +277,24 @@ namespace backend.Data
                 e.HasIndex(m => m.BodyHashHex);
                 e.HasIndex(m => m.ThreadId);
                 e.HasIndex(m => m.SenderId);
+            });
+
+            b.Entity<PlayerRating>(e =>
+            {
+                e.HasIndex(x => x.UserId).IsUnique();
+                e.HasIndex(x => x.Elo);
+                e.Property(x => x.League).HasMaxLength(32);
+                e.HasOne(x => x.User).WithOne(u => u.Rating)
+                    .HasForeignKey<PlayerRating>(x => x.UserId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            b.Entity<MatchmakingEntry>(e =>
+            {
+                e.HasIndex(x => x.UserId).IsUnique();
+                e.Property(x => x.PreferredColor).HasMaxLength(1);
+                e.Property(x => x.BotDifficulty).HasMaxLength(16);
+                e.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
             });
 
             var adminRoleId  = Guid.Parse("11111111-1111-1111-1111-111111111111");

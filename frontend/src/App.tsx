@@ -1,12 +1,5 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-/* eslint-disable @typescript-eslint/no-unused-vars */
-import {
-  useState,
-  useEffect,
-  useMemo,
-  useRef,
-  startTransition,
-} from 'react';
+import { useState, useEffect, useMemo, useRef, startTransition } from 'react';
 import { X } from 'lucide-react';
 import ChatDock from './chat/chatDock.tsx';
 import { API_BASE } from './apiOrigin.ts';
@@ -20,22 +13,6 @@ interface Piece {
   type: 'p' | 'r' | 'n' | 'b' | 'q' | 'k';
 }
 
-interface GameState {
-  turn: 'w' | 'b';
-  castling: string;
-  ep: number | null;
-  halfmove: number;
-  fullmove: number;
-}
-
-interface Move {
-  from: number;
-  to: number;
-  captured?: Piece;
-  flags?: string;
-  promotion?: string;
-}
-
 interface Game {
   id: string;
   code: string;
@@ -43,9 +20,19 @@ interface Game {
   status: string;
   outcome: string | null;
   reason: string | null;
+  isRanked: boolean;
+  isBotGame: boolean;
+  botDifficulty?: string | null;
+  eloChange?: {
+    white?: { oldElo: number; newElo: number; league: string };
+    black?: { oldElo: number; newElo: number; league: string };
+  } | null;
   participants: Array<{
     displayName: string;
     color: 'w' | 'b';
+    isBot: boolean;
+    elo: number;
+    league: string;
   }>;
   history: Array<{
     index: number;
@@ -63,30 +50,42 @@ interface User {
   displayName: string;
 }
 
-interface ChatThread {
-  id: string;
-  withUser: string;
-  lastMessage?: string;
-  unread: number;
+interface PlayerRating {
+  userName?: string;
+  displayName?: string;
+  elo: number;
+  league: string;
+  wins: number;
+  losses: number;
+  draws: number;
+  gamesPlayed: number;
+  winStreak: number;
+  peakElo?: number;
+}
+
+interface MatchmakingStatus {
+  status: 'idle' | 'queued' | 'matched' | 'already_queued' | 'cancelled';
+  gameId?: string;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
-const KNIGHT = [[-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1]];
-const KING = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]];
-const ROOK_DIR = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-const BISHOP_DIR = [[1, 1], [-1, 1], [1, -1], [-1, -1]];
-const QUEEN_DIR = [...ROOK_DIR, ...BISHOP_DIR];
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// CHESS ENGINE FUNCTIONS
-// ═══════════════════════════════════════════════════════════════════════════════
-function idx(r: number, f: number) { return r * 8 + f; }
+const DEFAULT_ELO = 1200;
 function rank(i: number) { return Math.floor(i / 8); }
 function file(i: number) { return i % 8; }
-function colorOpp(c: 'w' | 'b'): 'w' | 'b' { return c === 'w' ? 'b' : 'w'; }
 function algebraic(i: number) { return 'abcdefgh'[file(i)] + (8 - rank(i)); }
+
+function leagueBadgeClass(league: string) {
+  if (league.startsWith('Iron')) return 'text-gray-400 bg-gray-800';
+  if (league.startsWith('Bronze')) return 'text-amber-700 bg-amber-900/30';
+  if (league.startsWith('Silver')) return 'text-slate-300 bg-slate-700';
+  if (league.startsWith('Gold')) return 'text-yellow-400 bg-yellow-900/30';
+  if (league.startsWith('Platinum')) return 'text-teal-300 bg-teal-900/30';
+  if (league.startsWith('Diamond')) return 'text-blue-300 bg-blue-900/30';
+  if (league.startsWith('Master')) return 'text-purple-400 bg-purple-900/30';
+  return 'text-red-400 bg-red-900/30';
+}
 
 function normalizeGame(row: any): Game {
   return {
@@ -96,9 +95,16 @@ function normalizeGame(row: any): Game {
     status: row.status,
     outcome: row.outcome ?? null,
     reason: row.reason ?? null,
+    isRanked: row.isRanked ?? true,
+    isBotGame: row.isBotGame ?? false,
+    botDifficulty: row.botDifficulty ?? null,
+    eloChange: row.eloChange ?? null,
     participants: (row.participants ?? row.Participants ?? []).map((p: any) => ({
       displayName: p.displayName ?? p.DisplayName,
       color: p.color,
+      isBot: p.isBot ?? false,
+      elo: p.elo ?? DEFAULT_ELO,
+      league: p.league ?? 'Bronze IV'
     })),
     history: (row.history ?? row.History ?? []).map((m: any) => ({
       index: m.index,
@@ -221,6 +227,12 @@ function Auth({ onLogin }: { onLogin: (token: string, user: User) => void }) {
 }
 
 function Lobby({ token, user, onGameSelect }: { token: string; user: User; onGameSelect: (id: string, spectate?: boolean) => void }) {
+  const [lobbyTab, setLobbyTab] = useState<'games' | 'leaderboard'>('games');
+  const [myRating, setMyRating] = useState<PlayerRating | null>(null);
+  const [leaderboard, setLeaderboard] = useState<PlayerRating[]>([]);
+  const [matchmaking, setMatchmaking] = useState<'idle' | 'queued' | 'matched'>('idle');
+  const [botPicker, setBotPicker] = useState(false);
+  const [botColor, setBotColor] = useState<'w' | 'b' | 'random'>('random');
   const [games, setGames] = useState<Game[]>([]);
   const [creating, setCreating] = useState(false);
   const [joinCode, setJoinCode] = useState('');
@@ -252,6 +264,18 @@ function Lobby({ token, user, onGameSelect }: { token: string; user: User; onGam
     setGames(rows.map((r: any) => normalizeGame(r)));
   };
 
+  const loadMyRating = async () => {
+    const res = await fetch(`${API_BASE}/ratings/me`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) return;
+    setMyRating(await res.json());
+  };
+
+  const loadLeaderboard = async () => {
+    const res = await fetch(`${API_BASE}/ratings/leaderboard?take=50`);
+    if (!res.ok) return;
+    setLeaderboard(await res.json());
+  };
+
   useEffect(() => {
     let alive = true;
     const tick = async () => { if (alive) await loadGames(); };
@@ -259,6 +283,34 @@ function Lobby({ token, user, onGameSelect }: { token: string; user: User; onGam
     const i = setInterval(tick, 3000);
     return () => { alive = false; clearInterval(i); };
   }, [token, statusFilter, onlyMine, search]);
+  useEffect(() => {
+    loadMyRating();
+  }, [token]);
+  useEffect(() => {
+    if (lobbyTab === 'leaderboard') loadLeaderboard();
+  }, [lobbyTab]);
+
+  useEffect(() => {
+    if (matchmaking !== 'queued') return;
+    const i = setInterval(async () => {
+      const res = await fetch(`${API_BASE}/matchmaking/status`, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) return;
+      const data: MatchmakingStatus = await res.json();
+      if (data.status === 'matched' && data.gameId) {
+        setMatchmaking('matched');
+        onGameSelect(data.gameId);
+      }
+    }, 2000);
+    return () => clearInterval(i);
+  }, [matchmaking, token]);
+
+  useEffect(() => {
+    return () => {
+      if (matchmaking === 'queued') {
+        fetch(`${API_BASE}/matchmaking/queue`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+      }
+    };
+  }, [matchmaking, token]);
 
   const createGame = async () => {
     setCreating(true);
@@ -293,6 +345,35 @@ function Lobby({ token, user, onGameSelect }: { token: string; user: User; onGam
     } catch (err) {
       console.error('Join failed:', err);
     }
+  };
+
+  const queueRandom = async () => {
+    const res = await fetch(`${API_BASE}/matchmaking/queue`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
+    });
+    if (!res.ok) return;
+    const data: MatchmakingStatus = await res.json();
+    if (data.status === 'matched' && data.gameId) onGameSelect(data.gameId);
+    if (data.status === 'queued' || data.status === 'already_queued') setMatchmaking('queued');
+  };
+
+  const cancelQueue = async () => {
+    await fetch(`${API_BASE}/matchmaking/queue`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+    setMatchmaking('idle');
+  };
+
+  const playBot = async (difficulty: 'easy' | 'medium' | 'hard' | 'expert') => {
+    const preferredColor = botColor === 'random' ? null : botColor;
+    const res = await fetch(`${API_BASE}/bot/play`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ difficulty, preferredColor })
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    onGameSelect(data.gameId);
   };
 
   // ── Helper: detect winner string for finished games
@@ -354,6 +435,13 @@ function Lobby({ token, user, onGameSelect }: { token: string; user: User; onGam
                 {user.displayName || user.email}
               </span>
             </p>
+            {myRating && (
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+                <span className="text-cyan-300">Elo: {myRating.elo}</span>
+                <span className={`px-2 py-1 rounded ${leagueBadgeClass(myRating.league)}`}>{myRating.league}</span>
+                <span className="text-slate-200">W/L/D: {myRating.wins}/{myRating.losses}/{myRating.draws}</span>
+              </div>
+            )}
           </div>
           <button
             onClick={() => {
@@ -366,6 +454,13 @@ function Lobby({ token, user, onGameSelect }: { token: string; user: User; onGam
           </button>
         </div>
 
+        <div className="bg-slate-800 rounded-lg p-2 mb-4 flex gap-2">
+          <button onClick={() => setLobbyTab('games')} className={`px-4 py-2 rounded ${lobbyTab === 'games' ? 'bg-cyan-600 text-white' : 'bg-slate-700 text-slate-300'}`}>Games</button>
+          <button onClick={() => setLobbyTab('leaderboard')} className={`px-4 py-2 rounded ${lobbyTab === 'leaderboard' ? 'bg-cyan-600 text-white' : 'bg-slate-700 text-slate-300'}`}>Leaderboard</button>
+        </div>
+
+        {lobbyTab === 'games' && (
+          <>
         {/* ── NEW: Filters */}
         <div className="bg-slate-800 rounded-lg p-3 sm:p-4 mb-4 shadow-xl">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
@@ -443,6 +538,17 @@ function Lobby({ token, user, onGameSelect }: { token: string; user: User; onGam
             >
               {creating ? 'Creating...' : 'Create New Game'}
             </button>
+            {matchmaking === 'queued' ? (
+              <div className="flex-1 flex items-center gap-2">
+                <div className="flex-1 min-h-[48px] rounded bg-amber-900/30 text-amber-300 flex items-center justify-center animate-pulse">
+                  Searching for opponent... (Elo {myRating?.elo ?? DEFAULT_ELO})
+                </div>
+                <button onClick={cancelQueue} className="px-4 min-h-[48px] bg-slate-600 hover:bg-slate-500 rounded text-white">Cancel</button>
+              </div>
+            ) : (
+              <button onClick={queueRandom} className="flex-1 min-h-[48px] bg-amber-600 hover:bg-amber-700 text-white font-semibold py-3 rounded transition">Play Random</button>
+            )}
+            <button onClick={() => setBotPicker(v => !v)} className="flex-1 min-h-[48px] bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded transition">Play vs Bot</button>
             <div className="flex gap-2 flex-1 min-w-0">
               <input
                 type="text"
@@ -459,6 +565,21 @@ function Lobby({ token, user, onGameSelect }: { token: string; user: User; onGam
               </button>
             </div>
           </div>
+          {botPicker && (
+            <div className="mt-4 bg-slate-700 rounded p-3 space-y-3">
+              <div className="flex gap-2">
+                <button onClick={() => setBotColor('w')} className={`px-3 py-2 rounded ${botColor === 'w' ? 'bg-cyan-600' : 'bg-slate-600'}`}>White</button>
+                <button onClick={() => setBotColor('b')} className={`px-3 py-2 rounded ${botColor === 'b' ? 'bg-cyan-600' : 'bg-slate-600'}`}>Black</button>
+                <button onClick={() => setBotColor('random')} className={`px-3 py-2 rounded ${botColor === 'random' ? 'bg-cyan-600' : 'bg-slate-600'}`}>Random</button>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <button onClick={() => playBot('easy')} className="bg-slate-600 hover:bg-slate-500 rounded p-2 text-white">Easy (600)</button>
+                <button onClick={() => playBot('medium')} className="bg-slate-600 hover:bg-slate-500 rounded p-2 text-white">Medium (1000)</button>
+                <button onClick={() => playBot('hard')} className="bg-slate-600 hover:bg-slate-500 rounded p-2 text-white">Hard (1500)</button>
+                <button onClick={() => playBot('expert')} className="bg-slate-600 hover:bg-slate-500 rounded p-2 text-white">Expert (2000)</button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Cards */}
@@ -520,10 +641,15 @@ function Lobby({ token, user, onGameSelect }: { token: string; user: User; onGam
                   <p className={`text-sm ${statusColorClass}`}>
                     {subline}
                     {g.participants.length > 0 && !finished && (
-                      <> • {g.participants.map(p => p.displayName).join(', ')}</>
+                      <> • {g.participants.map(p => `${p.displayName} (${p.elo})`).join(', ')}</>
                     )}
                     {finished && g.reason && <>, {g.reason}</>}
                   </p>
+                  {finished && g.eloChange && (
+                    <p className="text-xs text-amber-300 mt-1">
+                      White: {g.eloChange.white?.oldElo}→{g.eloChange.white?.newElo} | Black: {g.eloChange.black?.oldElo}→{g.eloChange.black?.newElo}
+                    </p>
+                  )}
                   {myColor && (
                     <p className={`text-xs mt-1 ${myColorClass}`}>
                       You are {myColor === 'w' ? 'White' : 'Black'}
@@ -548,6 +674,25 @@ function Lobby({ token, user, onGameSelect }: { token: string; user: User; onGam
             );
           })}
         </div>
+          </>
+        )}
+
+        {lobbyTab === 'leaderboard' && (
+          <div className="bg-slate-800 rounded-lg p-4 sm:p-6 shadow-xl">
+            <h2 className="text-xl font-semibold text-white mb-4">Leaderboard</h2>
+            <div className="space-y-2">
+              {leaderboard.map((r, i) => (
+                <div key={`${r.userName}-${i}`} className={`grid grid-cols-6 gap-2 rounded p-2 ${r.userName === user.userName ? 'bg-emerald-900/30' : 'bg-slate-700'}`}>
+                  <div className="text-slate-300">#{i + 1}</div>
+                  <div className="text-white col-span-2 truncate">{r.displayName || r.userName}</div>
+                  <div className="text-cyan-300">{r.elo}</div>
+                  <div><span className={`px-2 py-1 rounded text-xs ${leagueBadgeClass(r.league)}`}>{r.league}</span></div>
+                  <div className="text-slate-300 text-sm">{r.wins}/{r.losses}/{r.draws} ({r.winStreak})</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -562,6 +707,7 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
   const [promoting, setPromoting] = useState<{ from: Square; to: Square } | null>(null);
   const [selected, setSelected] = useState<Square | null>(null);
   const [lastMove, setLastMove] = useState<{ from: number; to: number } | null>(null);
+  const [ratingByUser, setRatingByUser] = useState<Record<string, PlayerRating>>({});
 
   const isSpectating = useMemo(() => {
     if (!game) return false;
@@ -633,7 +779,7 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
       headers: { Authorization: `Bearer ${token}` }
     });
     if (!res.ok) return;
-    const g: Game = await res.json();
+    const g = normalizeGame(await res.json());
     setGame(g);
 
     if (g.history && g.history.length > 0) {
@@ -671,7 +817,7 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
           headers: { Authorization: `Bearer ${token}` }
         });
         if (!res.ok) return;
-        const g: Game = await res.json();
+        const g = normalizeGame(await res.json());
         if (!alive) return;
 
         const currentLen = lastAppliedRef.current;
@@ -790,9 +936,116 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
       });
 
       if (!res.ok) throw new Error('Move rejected');
+      if (game?.isBotGame) {
+        await maybeDoBotMove();
+      }
     } catch (err) {
       await loadGameFull();
     }
+  };
+
+  const evaluateBoard = (c: Chess) => {
+    const vals: Record<string, number> = { p: 1, n: 3, b: 3.25, r: 5, q: 9, k: 0 };
+    let score = 0;
+    const board = c.board();
+    for (const row of board) for (const sq of row) if (sq) score += sq.color === 'w' ? vals[sq.type] : -vals[sq.type];
+    score += c.moves().length * (c.turn() === 'w' ? 0.1 : -0.1);
+    return score;
+  };
+
+  const minimax = (c: Chess, depth: number, alpha: number, beta: number, maximizingWhite: boolean): number => {
+    if (depth === 0 || c.isGameOver()) return evaluateBoard(c);
+    const moves = c.moves({ verbose: true }) as ChessMove[];
+    if (maximizingWhite) {
+      let val = -Infinity;
+      for (const m of moves) {
+        c.move(m);
+        val = Math.max(val, minimax(c, depth - 1, alpha, beta, false));
+        c.undo();
+        alpha = Math.max(alpha, val);
+        if (beta <= alpha) break;
+      }
+      return val;
+    }
+    let val = Infinity;
+    for (const m of moves) {
+      c.move(m);
+      val = Math.min(val, minimax(c, depth - 1, alpha, beta, true));
+      c.undo();
+      beta = Math.min(beta, val);
+      if (beta <= alpha) break;
+    }
+    return val;
+  };
+
+  const pickBotMove = (difficulty: string, c: Chess): ChessMove | null => {
+    const moves = c.moves({ verbose: true }) as ChessMove[];
+    if (!moves.length) return null;
+    const turn = c.turn();
+    const randomMove = () => moves[Math.floor(Math.random() * moves.length)];
+    if (difficulty === 'easy') {
+      const captures = moves.filter(m => !!m.captured);
+      if (captures.length && Math.random() < 0.3) return captures[Math.floor(Math.random() * captures.length)];
+      return randomMove();
+    }
+    if (difficulty === 'medium' && Math.random() < 0.2) return randomMove();
+    if (difficulty === 'hard' && Math.random() < 0.05) return randomMove();
+    const depth = difficulty === 'expert' ? 3 : difficulty === 'hard' ? 2 : 1;
+    let best: ChessMove | null = null;
+    let bestScore = turn === 'w' ? -Infinity : Infinity;
+    for (const m of moves) {
+      c.move(m);
+      const score = minimax(c, depth - 1, -Infinity, Infinity, c.turn() === 'w');
+      c.undo();
+      if (turn === 'w') {
+        if (score > bestScore) { bestScore = score; best = m; }
+      } else {
+        if (score < bestScore) { bestScore = score; best = m; }
+      }
+    }
+    return best ?? randomMove();
+  };
+
+  const maybeDoBotMove = async () => {
+    if (!game || game.status !== 'active') return;
+    const bot = game.participants.find(p => p.isBot);
+    if (!bot) return;
+    if (chess.turn() !== bot.color) return;
+    await new Promise(r => setTimeout(r, 500 + Math.floor(Math.random() * 1000)));
+    const difficulty = (game.botDifficulty || 'easy').toLowerCase();
+    const botMove = pickBotMove(difficulty, chess);
+    if (!botMove) return;
+    const after = new Chess(chess.fen());
+    after.move({ from: botMove.from, to: botMove.to, promotion: botMove.promotion });
+    const isCheckmate = after.isCheckmate();
+    const isDraw = after.isDraw();
+    const isStalemate = after.isStalemate();
+    let outcome = null;
+    let reason = null;
+    if (isCheckmate) {
+      outcome = 'checkmate';
+      reason = after.turn() === 'w' ? 'Black wins' : 'White wins';
+    } else if (isStalemate) {
+      outcome = 'draw';
+      reason = 'stalemate';
+    } else if (isDraw) {
+      outcome = 'draw';
+      reason = 'draw';
+    }
+    await fetch(`${API_BASE}/games/${gameId}/bot-move`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: algebraicToIndex(botMove.from),
+        to: algebraicToIndex(botMove.to),
+        flags: botMove.flags,
+        promotion: botMove.promotion ?? null,
+        fen: after.fen(),
+        outcome,
+        reason
+      })
+    });
+    await loadGameFull();
   };
 
   const handlePromotion = (type: string) => {
@@ -833,7 +1086,7 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
   const showResign = game.status === 'active' && myColor && !isSpectating;
 
   return (
-    <div className="min-h-screen min-h-[100dvh] bg-gradient-to-br from-slate-900 via-emerald-900 to-slate-900 px-3 py-4 sm:p-8 pb-[max(6rem,env(safe-area-inset-bottom,0px)+5rem)]">
+    <div className="min-h-screen min-h-[100dvh] bg-gradient-to-br from-slate-900 via-emerald-900 to-slate-900 px-3 py-4 sm:p-8 pb-[max(5rem,env(safe-area-inset-bottom,0px)+4rem)]">
       <div className="max-w-6xl mx-auto w-full min-w-0">
         <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center mb-6">
           <div className="flex items-center justify-between gap-2 sm:contents">
@@ -873,7 +1126,7 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
           <div className="lg:col-span-2">
             {game.status === 'waiting' && !myColor && !isSpectating && (
               <div className="bg-slate-800 rounded-lg p-4 sm:p-6 mb-4">
@@ -906,7 +1159,7 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
             )}
 
             <div className="bg-slate-800 rounded-lg p-3 sm:p-6 w-full max-w-full min-w-0 overflow-hidden">
-              <div className="relative w-full max-w-[min(100%,32rem)] mx-auto aspect-square">
+              <div className="chess-board-container relative w-full mx-auto aspect-square" style={{ maxWidth: 'min(100%, calc(100vh - 20rem))' }}>
                 <div className={`absolute inset-0 grid grid-cols-8 grid-rows-8 gap-0 border-4 border-slate-600 ${isFlipped ? 'rotate-180' : ''}`}>
                   {board.map((piece, i) => {
                     const square = indexToAlgebraic(i);
@@ -947,10 +1200,10 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
                 </div>
 
                 {lastMove && (() => {
-                  const fromX = file(lastMove.from) * 64 + 32 + 4;
-                  const fromY = rank(lastMove.from) * 64 + 32 + 4;
-                  const toX = file(lastMove.to) * 64 + 32 + 4;
-                  const toY = rank(lastMove.to) * 64 + 32 + 4;
+                  const fromX = (file(lastMove.from) + 0.5) * 12.5;
+                  const fromY = (rank(lastMove.from) + 0.5) * 12.5;
+                  const toX = (file(lastMove.to) + 0.5) * 12.5;
+                  const toY = (rank(lastMove.to) + 0.5) * 12.5;
 
                   const dx = toX - fromX;
                   const dy = toY - fromY;
@@ -963,7 +1216,7 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
                   return (
                     <svg
                       className={`absolute inset-0 w-full h-full pointer-events-none ${isFlipped ? 'rotate-180' : ''}`}
-                      viewBox="0 0 512 512"
+                      viewBox="0 0 100 100"
                       preserveAspectRatio="none"
                     >
                       <defs>
@@ -987,7 +1240,7 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
                         x2={toX}
                         y2={toY}
                         stroke="rgba(34, 197, 94, 0.8)"
-                        strokeWidth={6}
+                        strokeWidth={1.2}
                         strokeLinecap="round"
                         markerEnd="url(#arrowhead)"
                       />
@@ -1047,6 +1300,20 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
                     <div className={`mt-4 p-4 rounded ${resultClass}`}>
                       <p className="font-bold text-white">Game Over!</p>
                       <p className="text-white">{game.reason}</p>
+                      <div className="mt-2 space-y-1 text-sm">
+                        {game.participants.map(p => {
+                          const ec = p.color === 'w' ? game.eloChange?.white : game.eloChange?.black;
+                          const delta = ec ? ec.newElo - ec.oldElo : 0;
+                          const sign = delta > 0 ? '+' : '';
+                          return (
+                            <div key={p.color} className="flex items-center justify-between gap-2">
+                              <span>{p.displayName}</span>
+                              <span>{ec?.newElo ?? p.elo} <span className={delta >= 0 ? 'text-emerald-300' : 'text-red-300'}>{ec ? `(${sign}${delta})` : ''}</span></span>
+                              <span className={`px-2 py-0.5 rounded text-xs ${leagueBadgeClass(ec?.league ?? p.league)}`}>{ec?.league ?? p.league}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   );
                 })()}
@@ -1059,6 +1326,8 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
                 {game.participants.map((p) => (
                   <div key={p.color} className="flex items-center justify-between gap-2 text-slate-300 min-w-0">
                     <span className="font-semibold truncate">{p.displayName}</span>
+                    <span className="text-cyan-300">{p.elo}</span>
+                    <span className={`px-2 py-1 rounded text-xs ${leagueBadgeClass(p.league)}`}>{p.league}</span>
                     <span className={`px-3 py-1 rounded ${p.color === 'w' ? 'bg-white text-black' : 'bg-slate-900 text-white'}`}>
                       {p.color === 'w' ? 'White' : 'Black'}
                     </span>
