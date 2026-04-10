@@ -1,4 +1,5 @@
 using backend.Data;
+using backend.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
@@ -10,8 +11,9 @@ namespace backend
     public sealed class ChatHub : Hub
     {
         private readonly AppDb _db;
+        private readonly PresenceTracker _presence;
 
-        public ChatHub(AppDb db) { _db = db; }
+        public ChatHub(AppDb db, PresenceTracker presence) { _db = db; _presence = presence; }
 
         public override async Task OnConnectedAsync()
         {
@@ -19,6 +21,7 @@ namespace backend
             if (Guid.TryParse(uid, out var userId))
             {
                 await Groups.AddToGroupAsync(Context.ConnectionId, $"u:{userId}");
+                _presence.Connect(userId);
             }
             await base.OnConnectedAsync();
         }
@@ -29,6 +32,7 @@ namespace backend
             if (Guid.TryParse(uid, out var userId))
             {
                 await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"u:{userId}");
+                _presence.Disconnect(userId);
             }
             await base.OnDisconnectedAsync(ex);
         }

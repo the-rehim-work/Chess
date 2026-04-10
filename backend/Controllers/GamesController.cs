@@ -32,21 +32,30 @@ namespace backend.Controllers
         [Authorize]
         public async Task<IActionResult> CreateGame([FromBody] CreateGameDto? dto)
         {
+            var user = await _users.GetUserAsync(User);
+            if (user is null) return Unauthorized();
+
             var defaultFen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
             var fen = string.IsNullOrWhiteSpace(dto?.Fen) ? defaultFen : dto!.Fen;
-            var code = ShortCode();
+            var isCustom = !string.Equals(fen, defaultFen, StringComparison.Ordinal);
+
+            string creatorColor;
+            if (dto?.PreferredColor == "w") creatorColor = "w";
+            else if (dto?.PreferredColor == "b") creatorColor = "b";
+            else creatorColor = Random.Shared.Next(2) == 0 ? "w" : "b";
+
             var game = new Game
             {
-                Code = code,
+                Code = ShortCode(),
                 Fen = fen,
                 Status = "waiting",
-                IsRanked = string.Equals(fen, defaultFen, StringComparison.Ordinal)
+                IsRanked = !isCustom
             };
-
             _db.Games.Add(game);
+            _db.GameParticipants.Add(new GameParticipant { Game = game, UserId = user.Id, Color = creatorColor });
             await _db.SaveChangesAsync();
 
-            return Ok(new { game.Id, game.Code, game.Fen, game.Status });
+            return Ok(new { game.Id, game.Code, game.Fen, game.Status, myColor = creatorColor });
         }
 
         // ─────────────────────────────────────────────────────────────────────────
@@ -190,6 +199,9 @@ namespace backend.Controllers
             [FromQuery] string? q = null)
         {
             var me = await _users.GetUserAsync(User);
+            if (me is null) return Unauthorized();
+
+            var meId = me.Id;
 
             IQueryable<Game> query = _db.Games
                 .Include(x => x.Participants).ThenInclude(p => p.User).ThenInclude(u => u.Rating);
@@ -198,7 +210,7 @@ namespace backend.Controllers
                 query = query.Where(x => x.Status == status);
 
             if (onlyMine)
-                query = query.Where(x => x.Participants.Any(p => p.UserId == me.Id));
+                query = query.Where(x => x.Participants.Any(p => p.UserId == meId));
 
             if (!string.IsNullOrWhiteSpace(q))
             {
@@ -232,8 +244,8 @@ namespace backend.Controllers
                     }).ToList(),
                     Perspective = new
                     {
-                        IsParticipant = x.Participants.Any(p => p.UserId == me.Id),
-                        MyColor = x.Participants.Where(p => p.UserId == me.Id).Select(p => p.Color).FirstOrDefault(),
+                        IsParticipant = x.Participants.Any(p => p.UserId == meId),
+                        MyColor = x.Participants.Where(p => p.UserId == meId).Select(p => p.Color).FirstOrDefault(),
                         CanJoinWhite = !x.Participants.Any(p => p.Color == "w") && x.Status == "waiting",
                         CanJoinBlack = !x.Participants.Any(p => p.Color == "b") && x.Status == "waiting",
                         IsFull = x.Participants.Count >= 2
@@ -638,7 +650,7 @@ namespace backend.Controllers
             rating.UpdatedAt = DateTime.UtcNow;
         }
 
-        public sealed record CreateGameDto(string? Fen);
+        public sealed record CreateGameDto(string? Fen, string? PreferredColor);
         public sealed record MoveDto(int from, int to, string? flags, string? promotion, string fen, string? outcome, string? reason);
     }
 }

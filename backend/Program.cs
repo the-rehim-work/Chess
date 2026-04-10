@@ -82,7 +82,7 @@ builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
 
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<EloService>();
-builder.Services.AddSingleton<BotEngine>();
+builder.Services.AddSingleton<PresenceTracker>();
 builder.Services.AddControllers().AddJsonOptions(o =>
     o.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles);
 

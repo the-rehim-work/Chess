@@ -45,6 +45,7 @@ type Props = {
   token: string;
   user: MinimalUser;
   onLogout?: () => void;
+  onMatchFound?: (gameId: string) => void;
 };
 
 const ENDPOINTS = {
@@ -80,7 +81,7 @@ function sha1Hex(s: string) {
   return (h >>> 0).toString(16).padStart(8, '0');
 }
 
-export default function ChatDock({ token, user, onLogout }: Props) {
+export default function ChatDock({ token, user, onLogout, onMatchFound }: Props) {
   const [open, setOpen] = useState<boolean>(() => localStorage.getItem('chatDockOpen') === '1');
   const [view, setView] = useState<'threads' | 'chat'>('threads');
   const [threads, setThreads] = useState<ThreadSummary[]>([]);
@@ -101,6 +102,8 @@ export default function ChatDock({ token, user, onLogout }: Props) {
   const activeWithRef = useRef<string | null>(null);
   const messagesRef = useRef<Record<string, ChatMessage[]>>({});
   const userRef = useRef(user);
+  const onMatchFoundRef = useRef(onMatchFound);
+  useEffect(() => { onMatchFoundRef.current = onMatchFound; }, [onMatchFound]);
 
   useEffect(() => { activeWithRef.current = activeWith; }, [activeWith]);
   useEffect(() => { messagesRef.current = messages; }, [messages]);
@@ -143,6 +146,11 @@ export default function ChatDock({ token, user, onLogout }: Props) {
 
     const onUpdate = (payload: any) => {
       if (!payload) return;
+
+      if (payload.type === 'matchmaking:found' && payload.gameId) {
+        onMatchFoundRef.current?.(String(payload.gameId));
+        return;
+      }
 
       if (payload.type === 'chat:message') {
         const id: string = payload.id ?? payload.Id ?? crypto.randomUUID();

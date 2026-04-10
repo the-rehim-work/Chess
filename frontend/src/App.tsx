@@ -87,6 +87,38 @@ function leagueBadgeClass(league: string) {
   return 'text-red-400 bg-red-900/30';
 }
 
+function getMockyLeague(elo: number): string {
+  if (elo < 200) return 'Grass IV';
+  if (elo < 325) return 'Grass III';
+  if (elo < 450) return 'Grass II';
+  if (elo < 600) return 'Grass I';
+  if (elo < 700) return 'Puke IV';
+  if (elo < 800) return 'Puke III';
+  if (elo < 900) return 'Puke II';
+  if (elo < 1000) return 'Puke I';
+  if (elo < 1100) return 'Toilet IV';
+  if (elo < 1200) return 'Toilet III';
+  if (elo < 1300) return 'Toilet II';
+  if (elo < 1400) return 'Toilet I';
+  if (elo < 1500) return 'Microwave IV';
+  if (elo < 1600) return 'Microwave III';
+  if (elo < 1700) return 'Microwave II';
+  if (elo < 1800) return 'Microwave I';
+  if (elo < 1900) return 'Couch Potato III';
+  if (elo < 2000) return 'Couch Potato II';
+  if (elo < 2100) return 'Couch Potato I';
+  if (elo < 2200) return 'Fridge III';
+  if (elo < 2300) return 'Fridge II';
+  if (elo < 2400) return 'Fridge I';
+  if (elo < 2700) return 'Cockroach';
+  return 'God of Blunders';
+}
+
+function displayLeague(serverLeague: string, elo: number): string {
+  const style = localStorage.getItem('leagueStyle') ?? 'serious';
+  return style === 'mocky' ? getMockyLeague(elo) : serverLeague;
+}
+
 function normalizeGame(row: any): Game {
   return {
     id: row.id,
@@ -226,6 +258,73 @@ function Auth({ onLogin }: { onLogin: (token: string, user: User) => void }) {
   );
 }
 
+function SettingsModal({ open, onClose, token }: { open: boolean; onClose: () => void; token: string }) {
+  const [curPw, setCurPw] = useState('');
+  const [newPw, setNewPw] = useState('');
+  const [confirmPw, setConfirmPw] = useState('');
+  const [pwMsg, setPwMsg] = useState('');
+  const [leagueStyle, setLeagueStyle] = useState(() => localStorage.getItem('leagueStyle') ?? 'serious');
+
+  const changePw = async () => {
+    setPwMsg('');
+    if (newPw !== confirmPw) { setPwMsg('Passwords do not match.'); return; }
+    const res = await fetch(`${API_BASE}/auth/change-password`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ currentPassword: curPw, newPassword: newPw, confirmPassword: confirmPw })
+    });
+    const data = await res.json();
+    setPwMsg(data.message || (res.ok ? 'Done.' : 'Failed.'));
+    if (res.ok) { setCurPw(''); setNewPw(''); setConfirmPw(''); }
+  };
+
+  const toggleStyle = (s: string) => {
+    setLeagueStyle(s);
+    localStorage.setItem('leagueStyle', s);
+  };
+
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+      <div className="bg-slate-800 rounded-xl shadow-2xl border border-slate-700 w-full max-w-md p-6">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-xl font-bold text-white">Settings</h2>
+          <button onClick={onClose} className="p-2 hover:bg-slate-700 rounded text-white">✕</button>
+        </div>
+        <div className="mb-6">
+          <h3 className="text-white font-semibold mb-3">Change Password</h3>
+          <div className="space-y-2">
+            <input type="password" placeholder="Current Password" value={curPw} onChange={e => setCurPw(e.target.value)}
+              className="w-full p-3 bg-slate-700 text-white rounded border border-slate-600 outline-none" />
+            <input type="password" placeholder="New Password" value={newPw} onChange={e => setNewPw(e.target.value)}
+              className="w-full p-3 bg-slate-700 text-white rounded border border-slate-600 outline-none" />
+            <input type="password" placeholder="Confirm New Password" value={confirmPw} onChange={e => setConfirmPw(e.target.value)}
+              className="w-full p-3 bg-slate-700 text-white rounded border border-slate-600 outline-none" />
+            {pwMsg && <p className={`text-sm ${pwMsg.includes('Done') || pwMsg.includes('changed') ? 'text-green-400' : 'text-red-400'}`}>{pwMsg}</p>}
+            <button onClick={changePw} className="w-full min-h-[44px] bg-cyan-600 hover:bg-cyan-700 text-white font-semibold py-2 rounded">
+              Change Password
+            </button>
+          </div>
+        </div>
+        <div>
+          <h3 className="text-white font-semibold mb-3">League Names</h3>
+          <div className="flex gap-3">
+            <button onClick={() => toggleStyle('serious')}
+              className={`flex-1 py-2 rounded font-semibold ${leagueStyle === 'serious' ? 'bg-cyan-600 text-white' : 'bg-slate-700 text-slate-300'}`}>
+              Serious
+            </button>
+            <button onClick={() => toggleStyle('mocky')}
+              className={`flex-1 py-2 rounded font-semibold ${leagueStyle === 'mocky' ? 'bg-cyan-600 text-white' : 'bg-slate-700 text-slate-300'}`}>
+              Mocky
+            </button>
+          </div>
+          <p className="text-xs text-slate-400 mt-2">Mocky: Iron → Grass, Bronze → Puke, Silver → Toilet, Gold → Microwave, Platinum → Couch Potato, Diamond → Fridge, Master → Cockroach, GM → God of Blunders</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Lobby({ token, user, onGameSelect }: { token: string; user: User; onGameSelect: (id: string, spectate?: boolean) => void }) {
   const [lobbyTab, setLobbyTab] = useState<'games' | 'leaderboard'>('games');
   const [myRating, setMyRating] = useState<PlayerRating | null>(null);
@@ -237,10 +336,12 @@ function Lobby({ token, user, onGameSelect }: { token: string; user: User; onGam
   const [creating, setCreating] = useState(false);
   const [joinCode, setJoinCode] = useState('');
 
-  const [statusFilter, setStatusFilter] = useState<'all' | 'waiting' | 'active' | 'finished'>('waiting');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'waiting' | 'active' | 'finished'>('all');
   const [myColorFilter, setMyColorFilter] = useState<'all' | 'w' | 'b' | 'spectating'>('all');
   const [onlyMine, setOnlyMine] = useState(false);
   const [search, setSearch] = useState('');
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [onlineCount, setOnlineCount] = useState(0);
 
   function resetSearch() {
     setSearch('');
@@ -286,6 +387,18 @@ function Lobby({ token, user, onGameSelect }: { token: string; user: User; onGam
   useEffect(() => {
     loadMyRating();
   }, [token]);
+  useEffect(() => {
+    let alive = true;
+    const tick = async () => {
+      try {
+        const r = await fetch(`${API_BASE}/online/count`);
+        if (r.ok && alive) setOnlineCount((await r.json()).count);
+      } catch {}
+    };
+    tick();
+    const i = setInterval(tick, 15000);
+    return () => { alive = false; clearInterval(i); };
+  }, []);
   useEffect(() => {
     if (lobbyTab === 'leaderboard') loadLeaderboard();
   }, [lobbyTab]);
@@ -435,23 +548,35 @@ function Lobby({ token, user, onGameSelect }: { token: string; user: User; onGam
                 {user.displayName || user.email}
               </span>
             </p>
+            <div className="mt-1 flex items-center gap-1 text-sm text-emerald-400">
+              <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              {onlineCount} online
+            </div>
             {myRating && (
               <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
                 <span className="text-cyan-300">Elo: {myRating.elo}</span>
-                <span className={`px-2 py-1 rounded ${leagueBadgeClass(myRating.league)}`}>{myRating.league}</span>
+                <span className={`px-2 py-1 rounded ${leagueBadgeClass(myRating.league)}`}>{displayLeague(myRating.league, myRating.elo)}</span>
                 <span className="text-slate-200">W/L/D: {myRating.wins}/{myRating.losses}/{myRating.draws}</span>
               </div>
             )}
           </div>
-          <button
-            onClick={() => {
-              localStorage.clear();
-              window.location.reload();
-            }}
-            className="shrink-0 self-start sm:self-auto px-4 py-2.5 min-h-[44px] bg-slate-700 hover:bg-slate-600 text-white rounded touch-manipulation"
-          >
-            Logout
-          </button>
+          <div className="flex gap-2 shrink-0 self-start sm:self-auto">
+            <button
+              onClick={() => setSettingsOpen(true)}
+              className="px-4 py-2.5 min-h-[44px] bg-slate-700 hover:bg-slate-600 text-white rounded touch-manipulation"
+            >
+              Settings
+            </button>
+            <button
+              onClick={() => {
+                localStorage.clear();
+                window.location.reload();
+              }}
+              className="px-4 py-2.5 min-h-[44px] bg-slate-700 hover:bg-slate-600 text-white rounded touch-manipulation"
+            >
+              Logout
+            </button>
+          </div>
         </div>
 
         <div className="bg-slate-800 rounded-lg p-2 mb-4 flex gap-2">
@@ -686,7 +811,7 @@ function Lobby({ token, user, onGameSelect }: { token: string; user: User; onGam
                   <div className="text-slate-300">#{i + 1}</div>
                   <div className="text-white col-span-2 truncate">{r.displayName || r.userName}</div>
                   <div className="text-cyan-300">{r.elo}</div>
-                  <div><span className={`px-2 py-1 rounded text-xs ${leagueBadgeClass(r.league)}`}>{r.league}</span></div>
+                  <div><span className={`px-2 py-1 rounded text-xs ${leagueBadgeClass(r.league)}`}>{displayLeague(r.league, r.elo)}</span></div>
                   <div className="text-slate-300 text-sm">{r.wins}/{r.losses}/{r.draws} ({r.winStreak})</div>
                 </div>
               ))}
@@ -694,6 +819,7 @@ function Lobby({ token, user, onGameSelect }: { token: string; user: User; onGam
           </div>
         )}
       </div>
+      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} token={token} />
     </div>
   );
 }
@@ -707,7 +833,6 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
   const [promoting, setPromoting] = useState<{ from: Square; to: Square } | null>(null);
   const [selected, setSelected] = useState<Square | null>(null);
   const [lastMove, setLastMove] = useState<{ from: number; to: number } | null>(null);
-  const [ratingByUser, setRatingByUser] = useState<Record<string, PlayerRating>>({});
 
   const isSpectating = useMemo(() => {
     if (!game) return false;
@@ -808,6 +933,15 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
     if (me) setMyColor(me.color as 'w' | 'b');
     else setMyColor(null);
   }, [game, user.displayName]);
+
+  useEffect(() => {
+    if (!game || game.status !== 'active' || !game.isBotGame) return;
+    const bot = game.participants.find(p => p.isBot);
+    if (!bot) return;
+    if (chess.turn() !== bot.color) return;
+    const timer = setTimeout(() => maybeDoBotMove(), 800);
+    return () => clearTimeout(timer);
+  }, [game?.id, game?.status, game?.isBotGame, board.length]);
 
   useEffect(() => {
     let alive = true;
@@ -1129,32 +1263,15 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
           <div className="lg:col-span-2">
             {game.status === 'waiting' && !myColor && !isSpectating && (
-              <div className="bg-slate-800 rounded-lg p-4 sm:p-6 mb-4">
-                <h3 className="text-white text-lg sm:text-xl font-semibold mb-4">Choose Your Color</h3>
-                <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
-                  {!game.participants.some((p: { color: string }) => p.color === 'w') && (
-                    <button
-                      onClick={() => joinGame('w')}
-                      className="flex-1 min-h-[48px] bg-white hover:bg-gray-200 text-black font-semibold py-3 rounded transition touch-manipulation"
-                    >
-                      Play as White
-                    </button>
-                  )}
-                  {isSpectating && (
-                    <div className="bg-slate-700 rounded-lg p-4 mb-4 text-center">
-                      <p className="text-slate-300">👁️ Spectator Mode</p>
-                      <p className="text-xs text-slate-400 mt-1">Watching the game</p>
-                    </div>
-                  )}
-                  {!game.participants.some((p: { color: string }) => p.color === 'b') && (
-                    <button
-                      onClick={() => joinGame('b')}
-                      className="flex-1 min-h-[48px] bg-slate-900 hover:bg-black text-white font-semibold py-3 rounded transition touch-manipulation"
-                    >
-                      Play as Black
-                    </button>
-                  )}
-                </div>
+              <div className="bg-slate-800 rounded-lg p-4 sm:p-6 mb-4 text-center">
+                <h3 className="text-white text-lg font-semibold mb-4">Join this game?</h3>
+                <button
+                  onClick={() => joinGame('auto')}
+                  className="min-h-[48px] px-8 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3 rounded transition touch-manipulation"
+                >
+                  Join Game
+                </button>
+                <p className="text-xs text-slate-400 mt-2">Color assigned automatically</p>
               </div>
             )}
 
@@ -1309,7 +1426,7 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
                             <div key={p.color} className="flex items-center justify-between gap-2">
                               <span>{p.displayName}</span>
                               <span>{ec?.newElo ?? p.elo} <span className={delta >= 0 ? 'text-emerald-300' : 'text-red-300'}>{ec ? `(${sign}${delta})` : ''}</span></span>
-                              <span className={`px-2 py-0.5 rounded text-xs ${leagueBadgeClass(ec?.league ?? p.league)}`}>{ec?.league ?? p.league}</span>
+                              <span className={`px-2 py-0.5 rounded text-xs ${leagueBadgeClass(ec?.league ?? p.league)}`}>{displayLeague(ec?.league ?? p.league, ec?.newElo ?? p.elo)}</span>
                             </div>
                           );
                         })}
@@ -1327,7 +1444,7 @@ function ChessGame({ token, user, gameId, onBack, spectatorMode = false }: { tok
                   <div key={p.color} className="flex items-center justify-between gap-2 text-slate-300 min-w-0">
                     <span className="font-semibold truncate">{p.displayName}</span>
                     <span className="text-cyan-300">{p.elo}</span>
-                    <span className={`px-2 py-1 rounded text-xs ${leagueBadgeClass(p.league)}`}>{p.league}</span>
+                    <span className={`px-2 py-1 rounded text-xs ${leagueBadgeClass(p.league)}`}>{displayLeague(p.league, p.elo)}</span>
                     <span className={`px-3 py-1 rounded ${p.color === 'w' ? 'bg-white text-black' : 'bg-slate-900 text-white'}`}>
                       {p.color === 'w' ? 'White' : 'Black'}
                     </span>
@@ -1420,7 +1537,7 @@ export default function App() {
         />
       )}
 
-      <ChatDock token={token} user={user} onLogout={handleLogout} />
+      <ChatDock token={token} user={user} onLogout={handleLogout} onMatchFound={(gameId) => { setGameId(gameId); setSpectatorMode(false); }} />
     </>
   );
 }

@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
+using System.Linq;
 using System.Text.RegularExpressions;
 
 namespace backend.Controllers
@@ -85,6 +86,20 @@ namespace backend.Controllers
             return Ok(new { available = exists is null });
         }
 
+        [HttpPost("change-password")]
+        [Authorize]
+        public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordDto dto)
+        {
+            var user = await _users.GetUserAsync(User);
+            if (user is null) return Unauthorized();
+            if (dto.NewPassword != dto.ConfirmPassword)
+                return BadRequest(new { message = "Passwords do not match." });
+            var result = await _users.ChangePasswordAsync(user, dto.CurrentPassword, dto.NewPassword);
+            if (!result.Succeeded)
+                return BadRequest(new { message = result.Errors.FirstOrDefault()?.Description ?? "Failed." });
+            return Ok(new { message = "Password changed." });
+        }
+
         private string GenerateJwt(ApplicationUser user)
         {
             var key = _cfg["Jwt:Key"] ?? throw new InvalidOperationException("Jwt:Key missing");
@@ -115,5 +130,6 @@ namespace backend.Controllers
 
         public sealed record RegisterDto(string UserName, string Password, string? Email, string? DisplayName);
         public sealed record LoginDto(string UserOrEmail, string Password);
+        public sealed record ChangePasswordDto(string CurrentPassword, string NewPassword, string ConfirmPassword);
     }
 }

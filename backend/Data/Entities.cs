@@ -178,6 +178,15 @@ namespace backend.Data
         public string? BotDifficulty { get; set; }
     }
 
+    public sealed class MatchResult
+    {
+        public Guid Id { get; set; } = Guid.NewGuid();
+        public Guid UserId { get; set; }
+        public Guid GameId { get; set; }
+        public DateTime MatchedAt { get; set; } = DateTime.UtcNow;
+        public bool Consumed { get; set; }
+    }
+
     public sealed class AppDb : IdentityDbContext<ApplicationUser, ApplicationRole, Guid,
         IdentityUserClaim<Guid>, ApplicationUserRole, IdentityUserLogin<Guid>,
         IdentityRoleClaim<Guid>, IdentityUserToken<Guid>>
@@ -193,6 +202,7 @@ namespace backend.Data
         public DbSet<DirectMessage> DirectMessages => Set<DirectMessage>();
         public DbSet<PlayerRating> PlayerRatings => Set<PlayerRating>();
         public DbSet<MatchmakingEntry> MatchmakingQueue => Set<MatchmakingEntry>();
+        public DbSet<MatchResult> MatchResults => Set<MatchResult>();
 
         protected override void OnModelCreating(ModelBuilder b)
         {
@@ -295,6 +305,12 @@ namespace backend.Data
                 e.Property(x => x.PreferredColor).HasMaxLength(1);
                 e.Property(x => x.BotDifficulty).HasMaxLength(16);
                 e.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+            });
+
+            b.Entity<MatchResult>(e =>
+            {
+                e.HasIndex(x => new { x.UserId, x.Consumed });
+                e.HasIndex(x => x.MatchedAt);
             });
 
             var adminRoleId  = Guid.Parse("11111111-1111-1111-1111-111111111111");
